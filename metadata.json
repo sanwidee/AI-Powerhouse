@@ -1,0 +1,7 @@
+{
+  "name": "Ikhsan’s AI Powerhouse – Post Design Lab",
+  "description": "A high-performance personal design lab for creators to reverse-engineer, save, and generate modular social media post inspirations with a neon-blue dark UI aesthetic.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
