@@ -36,6 +36,11 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
   const [studioError, setStudioError] = useState<string | null>(null);
   const retouchFileRef = useRef<HTMLInputElement>(null);
 
+  // UI State
+  const [fullPreview, setFullPreview] = useState<string | null>(null);
+  const [isEditingBrand, setIsEditingBrand] = useState(false);
+  const [editedBrand, setEditedBrand] = useState<BrandReference | null>(null);
+
   // CRUD State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -454,40 +459,148 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
               <div className="flex items-center space-x-6">
                 <div className="p-4 rounded-2xl bg-pink-500/10 border border-pink-500/20 shadow-2xl"><Palette size={32} className="text-pink-400" /></div>
                 <div>
-                  <h2 className="text-4xl font-bold text-white">{selectedBrand.name}</h2>
+                  {isEditingBrand && editedBrand ? (
+                    <input
+                      type="text"
+                      className="text-4xl font-bold bg-slate-800 border-none rounded-lg text-white outline-none ring-2 ring-pink-500/30 px-3 py-1"
+                      value={editedBrand.name}
+                      onChange={(e) => setEditedBrand({ ...editedBrand, name: e.target.value })}
+                    />
+                  ) : (
+                    <h2 className="text-4xl font-bold text-white">{selectedBrand.name}</h2>
+                  )}
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.4em] mt-2">Brand DNA Profile</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedBrand(null)} className="px-8 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 transition-all font-bold text-slate-300">Close Profile</button>
+              <div className="flex items-center space-x-4">
+                {isEditingBrand ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (editedBrand) {
+                          onUpdateBrand(editedBrand);
+                          setSelectedBrand(editedBrand);
+                          setIsEditingBrand(false);
+                        }
+                      }}
+                      className="px-8 py-3.5 rounded-2xl bg-pink-600 hover:bg-pink-500 transition-all font-bold text-white shadow-xl shadow-pink-500/20"
+                    >
+                      Save Changes
+                    </button>
+                    <button onClick={() => setIsEditingBrand(false)} className="px-6 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 transition-all font-bold text-slate-400">Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setEditedBrand(selectedBrand);
+                        setIsEditingBrand(true);
+                      }}
+                      className="px-8 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 transition-all font-bold text-slate-300"
+                    >
+                      Edit Profile
+                    </button>
+                    <button onClick={() => setSelectedBrand(null)} className="px-8 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 transition-all font-bold text-slate-300">Close Profile</button>
+                  </>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
               <div className="lg:col-span-5">
-                <div className="rounded-[3rem] bg-slate-950 border border-slate-800 aspect-square flex items-center justify-center p-12 shadow-2xl">
-                  <img src={selectedBrand.imageSource} className="max-w-full max-h-full object-contain" alt="Logo" />
+                <div
+                  className="rounded-[3rem] bg-slate-950 border border-slate-800 aspect-square flex items-center justify-center p-12 shadow-2xl cursor-zoom-in group relative overflow-hidden"
+                  onClick={() => setFullPreview(selectedBrand.imageSource)}
+                >
+                  <img src={selectedBrand.imageSource} className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-500" alt="Logo" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Eye size={32} className="text-white" />
+                  </div>
                 </div>
               </div>
 
               <div className="lg:col-span-7 space-y-8">
                 <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-slate-800 shadow-2xl space-y-8">
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-2 gap-8">
                     <div className="space-y-4">
                       <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Brand Vibe</h4>
-                      <p className="text-xl font-bold text-pink-400">{selectedBrand.dna.brand_vibe}</p>
+                      {isEditingBrand && editedBrand ? (
+                        <textarea
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 leading-relaxed outline-none ring-1 ring-pink-500/20 focus:ring-pink-500/50 min-h-[160px]"
+                          value={editedBrand.dna.brand_vibe}
+                          onChange={(e) => setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, brand_vibe: e.target.value } })}
+                        />
+                      ) : (
+                        <p className="text-sm text-slate-300 leading-relaxed break-words">{selectedBrand.dna.brand_vibe}</p>
+                      )}
                     </div>
                     <div className="space-y-4">
                       <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Color Logic</h4>
-                      <p className="text-sm text-slate-300 leading-relaxed">{selectedBrand.dna.color_logic}</p>
+                      {isEditingBrand && editedBrand ? (
+                        <textarea
+                          className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 leading-relaxed outline-none ring-1 ring-slate-700/50 focus:ring-slate-500/50 min-h-[160px]"
+                          value={editedBrand.dna.color_logic}
+                          onChange={(e) => setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, color_logic: e.target.value } })}
+                        />
+                      ) : (
+                        <p className="text-sm text-slate-300 leading-relaxed">{selectedBrand.dna.color_logic}</p>
+                      )}
                     </div>
                   </div>
 
                   <div className="space-y-4">
-                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Primary Palette</h4>
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Primary Palette</h4>
+                      {isEditingBrand && editedBrand && (
+                        <button
+                          onClick={() => setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, primary_colors: [...editedBrand.dna.primary_colors, '#000000'] } })}
+                          className="text-[10px] font-bold text-pink-400 uppercase tracking-widest hover:text-pink-300 transition-colors"
+                        >
+                          + Add Color
+                        </button>
+                      )}
+                    </div>
                     <div className="flex flex-wrap gap-4">
-                      {selectedBrand.dna.primary_colors.map((color, idx) => (
-                        <div key={idx} className="flex items-center space-x-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
-                          <div className="w-10 h-10 rounded-xl shadow-inner border border-white/10" style={{ backgroundColor: color }} />
-                          <span className="text-xs font-mono text-slate-400 uppercase">{color}</span>
+                      {(isEditingBrand && editedBrand ? editedBrand.dna.primary_colors : selectedBrand.dna.primary_colors).map((color, idx) => (
+                        <div key={idx} className="flex items-center space-x-3 bg-slate-950 p-3 rounded-2xl border border-slate-800 group/color relative">
+                          {isEditingBrand && editedBrand ? (
+                            <>
+                              <input
+                                type="color"
+                                className="w-10 h-10 rounded-xl bg-transparent border-none cursor-pointer outline-none"
+                                value={color}
+                                onChange={(e) => {
+                                  const newColors = [...editedBrand.dna.primary_colors];
+                                  newColors[idx] = e.target.value;
+                                  setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, primary_colors: newColors } });
+                                }}
+                              />
+                              <input
+                                type="text"
+                                className="text-xs font-mono text-slate-400 uppercase bg-transparent border-none w-16 outline-none"
+                                value={color}
+                                onChange={(e) => {
+                                  const newColors = [...editedBrand.dna.primary_colors];
+                                  newColors[idx] = e.target.value;
+                                  setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, primary_colors: newColors } });
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  const newColors = editedBrand.dna.primary_colors.filter((_, i) => i !== idx);
+                                  setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, primary_colors: newColors } });
+                                }}
+                                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover/color:opacity-100 transition-opacity"
+                              >
+                                <XCircle size={12} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-10 h-10 rounded-xl shadow-inner border border-white/10" style={{ backgroundColor: color }} />
+                              <span className="text-xs font-mono text-slate-400 uppercase">{color}</span>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -495,9 +608,17 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
 
                   <div className="space-y-4">
                     <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Typography Systems</h4>
-                    <p className="text-sm text-slate-400 italic bg-slate-950/50 p-4 rounded-xl border border-slate-800">
-                      {selectedBrand.dna.typography_notes}
-                    </p>
+                    {isEditingBrand && editedBrand ? (
+                      <textarea
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-sm text-slate-300 leading-relaxed outline-none min-h-[120px]"
+                        value={editedBrand.dna.typography_notes}
+                        onChange={(e) => setEditedBrand({ ...editedBrand, dna: { ...editedBrand.dna, typography_notes: e.target.value } })}
+                      />
+                    ) : (
+                      <p className="text-sm text-slate-400 italic bg-slate-950/50 p-4 rounded-xl border border-slate-800 leading-relaxed">
+                        {selectedBrand.dna.typography_notes}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -527,6 +648,15 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
             setIsAnnotating(false);
           }}
         />
+      )}
+
+      {fullPreview && (
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-8 bg-black/95 animate-in fade-in duration-300">
+          <button onClick={() => setFullPreview(null)} className="absolute top-8 right-8 p-4 text-white/50 hover:text-white transition-colors bg-white/5 rounded-full border border-white/10">
+            <XCircle size={32} />
+          </button>
+          <img src={fullPreview} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg border border-white/10" alt="Full Preview" />
+        </div>
       )}
     </div>
   );
