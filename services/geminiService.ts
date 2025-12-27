@@ -105,10 +105,12 @@ export const analyzeDesign = async (imageB64: string, userNotes?: string): Promi
       "white_space_logic": "How much breathing room is used"
     },
     "placeholder_map": {
-      "headline_style": "Visual style for titles",
       "body_style": "Visual style for subtext",
       "cta_style": "Visual style for buttons/links"
     },
+    "content_registry": [
+      { "id": "headline", "label": "Main Headline", "placeholder": "The current text found in image", "type": "text" }
+    ],
     "base_visual_dna_prompt": "A highly descriptive prompt for an image generator to recreate the LAYOUT and STYLE of this image but without the specific text. Describe the composition, textures, lighting, and placement of elements clearly."
   }
   
@@ -140,6 +142,12 @@ export const analyzeDesign = async (imageB64: string, userNotes?: string): Promi
         composition_map: "Centered Headline, Bottom Illustration",
         aesthetic_motifs: "Clean edges, soft shadows"
       };
+    }
+
+    if (!jsonData.content_registry) {
+      jsonData.content_registry = [
+        { id: 'headline', label: 'Main Headline', placeholder: 'Enter headline...', type: 'text' }
+      ];
     }
 
     if (!jsonData.base_visual_dna_prompt || jsonData.base_visual_dna_prompt.includes('UNDEFINED')) {
@@ -220,8 +228,11 @@ export const generatePostFromReference = async (
   ${carouselCtx}
   ${brandContext}
   INTENSITY: ${intensity}
-
-  Return a production report then ---PROMPT_START--- then a single-line visual prompt that includes the layout logic of the source DNA but with the new content from the brief.`;
+ 
+  Return a production report then ---PROMPT_START--- then a single-line visual prompt that includes the layout logic of the source DNA but with the new content from the brief.
+  
+  ${brief.structured_content ? `PRIORITY CONTENT MAPPING: The user provided specific text for these slots. Use them exactly: ${JSON.stringify(brief.structured_content)}` : ''}
+  `;
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',

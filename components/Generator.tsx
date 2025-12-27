@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
-import { Rocket, Sparkles, ArrowLeft, ChevronDown, ImageIcon, Loader2, Copy, Check, Zap, AlertCircle, RefreshCw, Send, Palette, XCircle, Layers, Save } from 'lucide-react';
+import { Rocket, Sparkles, ArrowLeft, ChevronDown, ImageIcon, Loader2, Copy, Check, Zap, AlertCircle, RefreshCw, Send, Palette, XCircle, Layers, Save, Target, LayoutTemplate, FileCode, Eye } from 'lucide-react';
 import { DesignReference, BrandReference, RemixIntensity, ContentBrief, AspectRatio, GeneratedPost } from '../types';
 import { generatePostFromReference, generateRemixImage, refinePostImage } from '../services/geminiService';
+import AnnotationCanvas from './AnnotationCanvas';
 
 interface GeneratorProps {
   references: DesignReference[];
@@ -34,6 +35,11 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
   const [remixImage, setRemixImage] = useState<string | null>(null);
   const [refineInput, setRefineInput] = useState('');
   const [isRefining, setIsRefining] = useState(false);
+  const [precisionMode, setPrecisionMode] = useState(false);
+  const [structuredData, setStructuredData] = useState<Record<string, string>>({});
+  const [isAnnotating, setIsAnnotating] = useState(false);
+  const [annotationSketch, setAnnotationSketch] = useState<string | null>(null);
+  const [fullPreview, setFullPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const selectedRef = references.find(r => r.id === selectedId);
@@ -50,7 +56,8 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
     const finalBrief: ContentBrief = {
       ...brief,
       slide_number: carouselMode ? brief.slide_number : undefined,
-      total_slides: carouselMode ? brief.total_slides : undefined
+      total_slides: carouselMode ? brief.total_slides : undefined,
+      structured_content: precisionMode ? structuredData : undefined
     };
 
     try {
@@ -102,9 +109,16 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
     setIsRefining(true);
     setError(null);
     try {
-      const { image: refined } = await refinePostImage(remixImage, refineInput, brief.aspectRatio);
+      const { image: refined } = await refinePostImage(
+        remixImage,
+        refineInput,
+        brief.aspectRatio,
+        annotationSketch || undefined,
+        !!annotationSketch
+      );
       setRemixImage(refined);
       setRefineInput('');
+      setAnnotationSketch(null);
     } catch (err: any) {
       setError("Retouch engine failure. Instructions were too complex or blocked.");
     } finally {
@@ -124,101 +138,269 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-5 space-y-6">
-          <div className="p-6 rounded-[2rem] border border-slate-800 bg-slate-900/50 shadow-2xl space-y-6">
+      <div className="space-y-8">
+        {/* TOP ROW: SELECTION & LOGIC */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+          {/* 1. SELECT COMPONENTS */}
+          <div className="p-8 rounded-[2.5rem] border border-slate-800 bg-slate-900/40 shadow-2xl space-y-6">
+            <div className="flex items-center space-x-3 mb-2">
+              <div className="p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                <LayoutTemplate size={18} className="text-blue-400" />
+              </div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">1. Select Components</label>
+            </div>
+
             <div className="space-y-4">
-              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">1. Select Components</label>
               <div className="space-y-3">
-                <select className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-                  <option value="" className="bg-slate-900">Choose Structural Blueprint...</option>
-                  {references.map(r => <option key={r.id} value={r.id} className="bg-slate-900">{r.name}</option>)}
-                </select>
-                <select className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50" value={selectedBrandId} onChange={(e) => setSelectedBrandId(e.target.value)}>
-                  <option value="" className="bg-slate-900">Choose Brand Override (Optional)...</option>
-                  {brands.map(b => <option key={b.id} value={b.id} className="bg-slate-900">{b.name} Identity</option>)}
-                </select>
+                <div className="flex flex-col space-y-2">
+                  <select className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
+                    <option value="" className="bg-slate-900">Choose Structural Blueprint...</option>
+                    {references.map(r => <option key={r.id} value={r.id} className="bg-slate-900">{r.name}</option>)}
+                  </select>
+                  {selectedRef && (
+                    <div
+                      className="h-32 w-full rounded-2xl border border-blue-500/20 overflow-hidden bg-black/40 animate-in slide-in-from-top-2 duration-300 cursor-pointer group/preview relative"
+                      onClick={() => setFullPreview(selectedRef.templateImage || selectedRef.imageSource)}
+                    >
+                      <img src={selectedRef.templateImage || selectedRef.imageSource} className="w-full h-full object-contain opacity-70 group-hover/preview:opacity-100 transition-opacity" alt="Preview" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/preview:opacity-100 transition-opacity bg-black/40">
+                        <Eye size={20} className="text-white" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col space-y-2">
+                  <select className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/50" value={selectedBrandId} onChange={(e) => setSelectedBrandId(e.target.value)}>
+                    <option value="" className="bg-slate-900">Choose Brand Identity (Optional)...</option>
+                    {brands.map(b => <option key={b.id} value={b.id} className="bg-slate-900">{b.name}</option>)}
+                  </select>
+                  {selectedBrand && (
+                    <div
+                      className="h-24 w-full rounded-2xl border border-pink-500/20 overflow-hidden bg-slate-950 animate-in slide-in-from-top-2 duration-300 flex items-center justify-center p-4 cursor-pointer group/brand relative"
+                      onClick={() => setFullPreview(selectedBrand.imageSource)}
+                    >
+                      <img src={selectedBrand.imageSource} className="max-w-full max-h-full object-contain opacity-60 group-hover/brand:opacity-100 transition-opacity" alt="Preview" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/brand:opacity-100 transition-opacity bg-black/40">
+                        <Eye size={18} className="text-white" />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. GENERATION MODE */}
+          <div className="p-8 rounded-[2.5rem] border border-slate-800 bg-slate-900/40 shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                  <Zap size={18} className="text-indigo-400" />
+                </div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">2. Generation Mode</label>
+              </div>
+              <div className="flex space-x-2">
+                <button onClick={() => setCarouselMode(!carouselMode)} className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${carouselMode ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-400'}`}>
+                  <Layers size={12} />
+                  <span>CAROUSEL</span>
+                </button>
+                <button onClick={() => setPrecisionMode(!precisionMode)} className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-bold transition-all border ${precisionMode ? 'bg-blue-500/10 border-blue-500 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.2)]' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-400'}`}>
+                  <Target size={12} />
+                  <span>PRECISION</span>
+                </button>
               </div>
             </div>
 
-            <div className="space-y-4 border-t border-slate-800 pt-6">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">2. Content & Format</label>
-                <button onClick={() => setCarouselMode(!carouselMode)} className={`flex items-center space-x-2 px-3 py-1 rounded-full text-[10px] font-bold transition-all border ${carouselMode ? 'bg-indigo-500/10 border-indigo-500 text-indigo-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-400'}`}>
-                  <Layers size={12} />
-                  <span>{carouselMode ? 'CAROUSEL ON' : 'CAROUSEL OFF'}</span>
-                </button>
+            <div className="flex-1 space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Main Topic / Headline</label>
+                <input type="text" placeholder="e.g. 5 Habits of Successful Leaders" className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all" value={brief.topic} onChange={(e) => setBrief({ ...brief, topic: e.target.value })} />
               </div>
-              <input type="text" placeholder="Main Topic / Headline..." className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none" value={brief.topic} onChange={(e) => setBrief({ ...brief, topic: e.target.value })} />
-              <textarea placeholder="Specific Elements / Copy..." rows={2} className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none" value={brief.elements_to_display} onChange={(e) => setBrief({ ...brief, elements_to_display: e.target.value })} />
 
-              <div className="grid grid-cols-2 gap-4">
-                <select value={brief.aspectRatio} onChange={(e) => setBrief({ ...brief, aspectRatio: e.target.value as AspectRatio })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-xs outline-none">
-                  <option value="1:1">1:1 Square</option>
-                  <option value="4:3">4:3 Slide</option>
-                  <option value="3:4">3:4 Portrait</option>
-                  <option value="9:16">9:16 Story</option>
-                  <option value="16:9">16:9 Landscape</option>
-                </select>
-                <select value={intensity} onChange={(e) => setIntensity(e.target.value as RemixIntensity)} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-xs outline-none">
-                  <option value="strict">Strict DNA</option>
-                  <option value="light">Light Touch</option>
-                  <option value="heavy">Creative Heavy</option>
-                </select>
-              </div>
+              {precisionMode ? (
+                <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-500">
+                  <div className="p-5 rounded-2xl bg-blue-500/5 border border-blue-500/10 grid grid-cols-1 gap-4 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    <p className="text-[10px] font-bold text-blue-400/60 uppercase tracking-widest mb-1">Extracted DNA Slots</p>
+                    {selectedRef?.jsonSpec.content_registry.map(field => (
+                      <div key={field.id} className="space-y-1.5">
+                        <label className="text-[10px] font-medium text-slate-400 ml-1">{field.label}</label>
+                        <input
+                          type="text"
+                          placeholder={field.placeholder}
+                          className="w-full px-4 py-2 bg-slate-900/50 border border-slate-700/50 rounded-xl text-xs focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                          value={structuredData[field.id] || ''}
+                          onChange={(e) => setStructuredData({ ...structuredData, [field.id]: e.target.value })}
+                        />
+                      </div>
+                    ))}
+                    {(!selectedRef || selectedRef.jsonSpec.content_registry.length === 0) && (
+                      <div className="py-12 flex flex-col items-center justify-center opacity-30">
+                        <Target size={32} className="mb-2" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest">No slots detected</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-in fade-in duration-500">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Context & Copy</label>
+                    <textarea
+                      placeholder="Describe specific elements, copy, or instructions..."
+                      rows={6}
+                      className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-sm focus:ring-2 focus:ring-indigo-500/30 outline-none resize-none"
+                      value={brief.elements_to_display}
+                      onChange={(e) => setBrief({ ...brief, elements_to_display: e.target.value })}
+                    />
+                  </div>
+                </div>
+              )}
 
               {carouselMode && (
-                <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 grid grid-cols-2 gap-4">
-                  <input type="number" min="1" className="w-full bg-slate-800/50 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs text-indigo-300" value={brief.slide_number} onChange={(e) => setBrief({ ...brief, slide_number: parseInt(e.target.value) })} />
-                  <input type="number" min="1" className="w-full bg-slate-800/50 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs text-indigo-300" value={brief.total_slides} onChange={(e) => setBrief({ ...brief, total_slides: parseInt(e.target.value) })} />
+                <div className="p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/10 flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Carousel Sequence</span>
+                  <div className="flex items-center space-x-2">
+                    <input type="number" min="1" className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center" value={brief.slide_number} onChange={(e) => setBrief({ ...brief, slide_number: parseInt(e.target.value) })} />
+                    <span className="text-slate-600">of</span>
+                    <input type="number" min="1" className="w-16 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center" value={brief.total_slides} onChange={(e) => setBrief({ ...brief, total_slides: parseInt(e.target.value) })} />
+                  </div>
+                </div>
+              )}
+
+              {/* ACTION BAR RELOCATED HERE */}
+              <div className="pt-6 mt-auto border-t border-slate-800/50 space-y-4">
+                <div className="flex items-center justify-between px-1">
+                  <div className="flex items-center space-x-2 bg-slate-800/40 p-1 rounded-xl border border-slate-700/30">
+                    <select value={brief.aspectRatio} onChange={(e) => setBrief({ ...brief, aspectRatio: e.target.value as AspectRatio })} className="bg-transparent border-none text-[10px] font-bold uppercase tracking-widest text-slate-500 outline-none cursor-pointer px-2">
+                      <option value="1:1" className="bg-slate-900">1:1 Square</option>
+                      <option value="4:3" className="bg-slate-900">4:3 Slide</option>
+                      <option value="3:4" className="bg-slate-900">3:4 Portrait</option>
+                      <option value="9:16" className="bg-slate-900">9:16 Story</option>
+                      <option value="16:9" className="bg-slate-900">16:9 Landscape</option>
+                    </select>
+                    <div className="w-px h-3 bg-slate-700/50" />
+                    <select value={intensity} onChange={(e) => setIntensity(e.target.value as RemixIntensity)} className="bg-transparent border-none text-[10px] font-bold uppercase tracking-widest text-slate-500 outline-none cursor-pointer px-2">
+                      <option value="strict" className="bg-slate-900">Strict DNA</option>
+                      <option value="light" className="bg-slate-900">Light Touch</option>
+                      <option value="heavy" className="bg-slate-900">Creative Heavy</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button onClick={handleGenerate} disabled={loading || !selectedId || !brief.topic} className={`w-full py-4 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all ${loading ? 'bg-slate-800 text-slate-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl hover:shadow-indigo-500/20'}`}>
+                  {loading ? <Loader2 className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                  <span>{loading ? 'SYNTHESIZING...' : 'Deploy Content to Lab'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* BOTTOM SECTION: SYNTHESIS CHAMBER */}
+        <div className="p-10 rounded-[3rem] border border-slate-800 bg-slate-900/60 shadow-[0_0_50px_rgba(0,0,0,0.3)] space-y-8">
+          <div className="flex items-center justify-between border-b border-slate-800/50 pb-6">
+            <div className="flex items-center space-x-4">
+              <div className="p-3 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                <Rocket size={24} className="text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold tracking-tight text-white mb-1">The Synthesis Chamber</h3>
+                <div className="flex items-center space-x-2">
+                  <div className={`w-1.5 h-1.5 rounded-full ${loading ? 'bg-indigo-500 animate-pulse' : 'bg-slate-600'}`} />
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{loading ? 'Processing Visuals...' : 'Ready for Deployment'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            {/* RENDER VIEWPORT */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="aspect-square relative rounded-[2.5rem] overflow-hidden bg-black border border-slate-800 shadow-2xl flex items-center justify-center p-4 group">
+                {remixImage ? (
+                  <img src={remixImage} className="w-full h-full object-contain animate-in fade-in zoom-in-95 duration-700" alt="Result" />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-slate-700 opacity-20">
+                    <Zap size={80} className="mb-4" />
+                    <p className="text-xl font-bold uppercase tracking-[0.5em]">Chamber Ready</p>
+                  </div>
+                )}
+                {imageLoading && (
+                  <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-md flex flex-col items-center justify-center z-10">
+                    <Zap className="animate-bounce text-indigo-400 mb-4" size={48} />
+                    <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-[0.3em]">Pulverizing Visual DNA...</span>
+                  </div>
+                )}
+                {remixImage && !imageLoading && (
+                  <div className="absolute top-6 right-6 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={handleSaveResult} disabled={isSaved} className={`p-3 rounded-xl transition-all ${isSaved ? 'bg-green-500/20 text-green-400 border border-green-500/50' : 'bg-slate-900/90 backdrop-blur-md text-white hover:bg-green-600 border border-white/10'}`}>
+                      {isSaved ? <Check size={20} /> : <Save size={20} />}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {remixImage && (
+                <div className="flex items-center space-x-3 p-2 bg-slate-950/50 border border-slate-800 rounded-[1.5rem] animate-in slide-in-from-bottom-4">
+                  <input type="text" placeholder="Visual correction or retouching..." className="flex-1 bg-transparent border-none px-6 py-3 text-sm focus:ring-0 outline-none" value={refineInput} onChange={(e) => setRefineInput(e.target.value)} disabled={isRefining} />
+                  <div className="flex space-x-2 pr-2">
+                    <button onClick={() => setIsAnnotating(true)} className={`p-3 rounded-xl border transition-all ${annotationSketch ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-white'}`}>
+                      <Target size={18} />
+                    </button>
+                    <button onClick={handleRefine} disabled={!refineInput || isRefining} className="bg-blue-600 hover:bg-blue-500 px-6 rounded-xl text-white font-bold text-xs flex items-center space-x-2">
+                      {isRefining ? <Loader2 size={16} className="animate-spin" /> : <><Send size={16} /><span>Apply Change</span></>}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            {error && <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm"><p>{error}</p></div>}
-
-            <button onClick={handleGenerate} disabled={loading || !selectedId || !brief.topic} className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all ${loading ? 'bg-slate-800 text-slate-500' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg'}`}>
-              {loading ? <Loader2 className="animate-spin" size={20} /> : <Rocket size={20} />}
-              <span>{loading ? 'SYNTHESIZING...' : 'Deploy Content to Lab'}</span>
-            </button>
+            {/* SYNTHESIS REPORT */}
+            <div className="lg:col-span-5 flex flex-col h-full">
+              {resultText ? (
+                <div className="flex-1 rounded-[2.5rem] bg-slate-950/50 border border-slate-800 p-8 flex flex-col shadow-inner">
+                  <div className="flex items-center space-x-2 mb-6 text-slate-500">
+                    <Sparkles size={14} />
+                    <span className="text-[10px] font-bold uppercase tracking-[0.2em]">Synthesis Neural Report</span>
+                  </div>
+                  <div className="flex-1 overflow-y-auto text-sm text-slate-400 leading-relaxed font-light scrollbar-hide">
+                    {resultText}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 rounded-[2.5rem] border border-slate-800 border-dashed p-8 flex flex-col items-center justify-center opacity-20 hover:opacity-40 transition-opacity">
+                  <FileCode size={48} className="mb-4 text-slate-600" />
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-600 text-center max-w-[200px]">Waiting for Synthesis deployment</p>
+                </div>
+              )}
+              {error && <div className="mt-4 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs animate-in shake duration-300"><AlertCircle size={14} className="inline mr-2" />{error}</div>}
+            </div>
           </div>
         </div>
-
-        <div className="lg:col-span-7 h-full">
-          {resultText ? (
-            <div className="space-y-6">
-              <div className="bg-slate-900/80 backdrop-blur-md rounded-[2rem] p-8 border border-slate-800 shadow-2xl">
-                <div className="aspect-square relative rounded-2xl overflow-hidden bg-black border border-slate-800 mb-6 flex items-center justify-center">
-                  {remixImage ? <img src={remixImage} className="w-full h-full object-contain" alt="Result" /> : <div className="text-slate-700 font-mono text-xs uppercase tracking-widest">Render Pending...</div>}
-                  {imageLoading && <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-10"><Zap className="animate-bounce text-indigo-400" size={32} /></div>}
-                </div>
-
-                <div className="flex gap-4">
-                  <div className="flex-1 flex space-x-2">
-                    <input type="text" placeholder="Quick retouch..." className="flex-1 bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-xs outline-none" value={refineInput} onChange={(e) => setRefineInput(e.target.value)} disabled={isRefining} />
-                    <button onClick={handleRefine} disabled={!refineInput || isRefining} className="bg-blue-600 hover:bg-blue-500 p-3 rounded-xl text-white">
-                      {isRefining ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                    </button>
-                  </div>
-                  <button onClick={handleSaveResult} disabled={isSaved || !remixImage} className={`px-6 rounded-xl flex items-center space-x-2 font-bold text-xs transition-all ${isSaved ? 'bg-green-500/10 text-green-400 border border-green-500/50' : 'bg-green-600 hover:bg-green-500 text-white'}`}>
-                    {isSaved ? <Check size={16} /> : <Save size={16} />}
-                    <span>{isSaved ? 'Vaulted' : 'Save to Vault'}</span>
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-8 bg-slate-900/50 rounded-3xl border border-slate-800 text-sm text-slate-300 leading-relaxed font-light whitespace-pre-wrap">
-                <div className="flex items-center space-x-2 mb-4 text-slate-500"><Sparkles size={14} /><span className="text-[10px] font-bold uppercase tracking-widest">Synthesis Report</span></div>
-                {resultText}
-              </div>
-            </div>
-          ) : (
-            <div className="h-[600px] border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-slate-600 text-center p-12">
-              <Zap size={48} className="mb-6 opacity-10" /><h3 className="text-xl font-bold text-slate-400 mb-2">Synthesis Chamber Ready</h3>
-            </div>
-          )}
-        </div>
       </div>
+
+      {isAnnotating && remixImage && (
+        <AnnotationCanvas
+          imageSource={remixImage}
+          onCancel={() => setIsAnnotating(false)}
+          onSave={(sketch) => {
+            setAnnotationSketch(sketch);
+            setIsAnnotating(false);
+          }}
+        />
+      )}
+
+      {/* FULL PREVIEW MODAL */}
+      {fullPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-8 bg-black/95 animate-in fade-in duration-300">
+          <button onClick={() => setFullPreview(null)} className="absolute top-8 right-8 p-4 text-white/50 hover:text-white transition-colors bg-white/5 rounded-full border border-white/10">
+            <XCircle size={32} />
+          </button>
+          <img src={fullPreview} className="max-w-full max-h-full object-contain shadow-2xl rounded-lg border border-white/10" alt="Full Preview" />
+        </div>
+      )}
     </div>
   );
 };

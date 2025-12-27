@@ -10,6 +10,13 @@ declare global {
   }
 }
 
+export interface ExtractedField {
+  id: string;
+  label: string;
+  placeholder: string;
+  type: 'text' | 'number' | 'call_to_action';
+}
+
 export interface VisualStyle {
   layout_archetype: string;
   typography_system: string;
@@ -40,6 +47,7 @@ export interface DesignPromptJson {
     body_style: string;
     cta_style: string;
   };
+  content_registry: ExtractedField[];
   base_visual_dna_prompt: string;
 }
 
@@ -51,6 +59,7 @@ export interface ContentBrief {
   aspectRatio: AspectRatio;
   slide_number?: number;
   total_slides?: number;
+  structured_content?: Record<string, string>;
 }
 
 export interface RetouchHistory {

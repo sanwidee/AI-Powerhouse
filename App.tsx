@@ -137,6 +137,18 @@ const App: React.FC = () => {
     saveData('brands', updated);
   };
 
+  const updateReference = (ref: DesignReference) => {
+    const updated = references.map(r => r.id === ref.id ? ref : r);
+    setReferences(updated);
+    saveData('references', updated);
+  };
+
+  const updateBrand = (brand: BrandReference) => {
+    const updated = brands.map(b => b.id === brand.id ? brand : b);
+    setBrands(updated);
+    saveData('brands', updated);
+  };
+
   const deleteGeneratedPost = (id: string) => {
     const updated = generatedPosts.filter(p => p.id !== id);
     setGeneratedPosts(updated);
@@ -214,6 +226,8 @@ const App: React.FC = () => {
             onDelete={deleteReference}
             onDeleteBrand={deleteBrand}
             onDeletePost={deleteGeneratedPost}
+            onUpdateReference={updateReference}
+            onUpdateBrand={updateBrand}
             onUpdatePost={updateGeneratedPost}
             onBack={() => setActiveTool(AppTool.LANDING)}
           />

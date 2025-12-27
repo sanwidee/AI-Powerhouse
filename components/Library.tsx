@@ -1,9 +1,10 @@
 
 import React, { useState, useRef } from 'react';
 /* Added missing XCircle to the import list from lucide-react */
-import { Search, Tag, Trash2, ExternalLink, Download, ArrowLeft, Filter, Grid, List as ListIcon, ImageIcon, LayoutTemplate, Copy, Check, Palette, ShieldAlert, Zap, History, FileCode, Terminal, Rocket, Clock, MessageSquare, Send, Loader2, Upload, AlertCircle, Eye, XCircle } from 'lucide-react';
+import { Search, Tag, Trash2, ExternalLink, Download, ArrowLeft, Filter, Grid, List as ListIcon, ImageIcon, LayoutTemplate, Copy, Check, Palette, ShieldAlert, Zap, History, FileCode, Terminal, Rocket, Clock, MessageSquare, Send, Loader2, Upload, AlertCircle, Eye, XCircle, Type as TypeIcon, Target } from 'lucide-react';
 import { DesignReference, BrandReference, GeneratedPost, RetouchHistory, UsageLog } from '../types';
 import { refinePostImage } from '../services/geminiService';
+import AnnotationCanvas from './AnnotationCanvas';
 
 interface LibraryProps {
   references: DesignReference[];
@@ -12,11 +13,13 @@ interface LibraryProps {
   onDelete: (id: string) => void;
   onDeleteBrand: (id: string) => void;
   onDeletePost: (id: string) => void;
+  onUpdateReference: (ref: DesignReference) => void;
+  onUpdateBrand: (brand: BrandReference) => void;
   onUpdatePost: (post: GeneratedPost) => void;
   onBack: () => void;
 }
 
-const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, onDelete, onDeleteBrand, onDeletePost, onUpdatePost, onBack }) => {
+const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, onDelete, onDeleteBrand, onDeletePost, onUpdateReference, onUpdateBrand, onUpdatePost, onBack }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRef, setSelectedRef] = useState<DesignReference | null>(null);
   const [selectedBrand, setSelectedBrand] = useState<BrandReference | null>(null);
@@ -27,10 +30,34 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
   // Retouch Studio State
   const [retouchInput, setRetouchInput] = useState('');
   const [retouchRefImg, setRetouchRefImg] = useState<string | null>(null);
-  const [isAnnotation, setIsAnnotation] = useState(false);
+  const [isAnnotating, setIsAnnotating] = useState(false);
+  const [annotationSketch, setAnnotationSketch] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [studioError, setStudioError] = useState<string | null>(null);
   const retouchFileRef = useRef<HTMLInputElement>(null);
+
+  // CRUD State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  const handleEditStart = (id: string, currentName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingId(id);
+    setEditValue(currentName);
+  };
+
+  const handleEditSave = (type: 'ref' | 'brand', original: any, e: React.KeyboardEvent | React.FocusEvent) => {
+    if (e.type === 'keydown' && (e as React.KeyboardEvent).key !== 'Enter') return;
+
+    if (editValue.trim() && editValue !== original.name) {
+      if (type === 'ref') {
+        onUpdateReference({ ...original, name: editValue });
+      } else {
+        onUpdateBrand({ ...original, name: editValue });
+      }
+    }
+    setEditingId(null);
+  };
 
   const filteredRefs = references.filter(r =>
     r.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -54,8 +81,8 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
         selectedPost.imageSource,
         retouchInput,
         selectedPost.aspectRatio,
-        retouchRefImg || undefined,
-        isAnnotation
+        annotationSketch || retouchRefImg || undefined,
+        !!annotationSketch
       );
 
       const newHistory: RetouchHistory = {
@@ -63,10 +90,10 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
         timestamp: Date.now(),
         instruction: retouchInput,
         image: refinedImg,
-        type: retouchRefImg ? 'visual_reference' : (isAnnotation ? 'annotation' : 'text')
+        type: annotationSketch ? 'annotation' : (retouchRefImg ? 'visual_reference' : 'text')
       };
 
-      const updatedPost = {
+      const updatedPost: GeneratedPost = {
         ...selectedPost,
         imageSource: refinedImg,
         history: [newHistory, ...selectedPost.history]
@@ -76,7 +103,7 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
       setSelectedPost(updatedPost);
       setRetouchInput('');
       setRetouchRefImg(null);
-      setIsAnnotation(false);
+      setAnnotationSketch(null);
     } catch (err: any) {
       setStudioError("Production engine failed. The instruction was too complex or output blocked.");
     } finally {
@@ -159,25 +186,84 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
         {viewMode === 'brands' && (
           filteredBrands.map(brand => (
             <div key={brand.id} onClick={() => setSelectedBrand(brand)} className="group rounded-[2.5rem] border border-slate-800 bg-slate-900/40 overflow-hidden hover:border-pink-500/40 transition-all cursor-pointer">
-              <div className="aspect-[4/5] bg-slate-950 flex items-center justify-center p-8"><img src={brand.imageSource} className="max-w-full max-h-full object-contain opacity-60 group-hover:opacity-100" alt={brand.name} /></div>
+              <div className="aspect-[4/5] bg-slate-950 flex items-center justify-center p-8 relative">
+                <img src={brand.imageSource} className="max-w-full max-h-full object-contain opacity-60 group-hover:opacity-100" alt={brand.name} />
+                <div className="absolute top-4 right-4 flex space-x-2">
+                  <button onClick={(e) => handleEditStart(brand.id, brand.name, e)} className="p-2 rounded-lg bg-slate-800/80 text-slate-400 hover:text-white opacity-0 group-hover:opacity-100 transition-all"><FileCode size={14} /></button>
+                </div>
+              </div>
               <div className="p-5 flex items-center justify-between border-t border-slate-800/50">
-                <h4 className="font-bold text-white truncate">{brand.name}</h4>
+                {editingId === brand.id ? (
+                  <input
+                    autoFocus
+                    className="bg-slate-800 text-white text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-pink-500 w-full"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={(e) => handleEditSave('brand', brand, e)}
+                    onKeyDown={(e) => handleEditSave('brand', brand, e)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <h4 className="font-bold text-white truncate">{brand.name}</h4>
+                )}
                 <button onClick={(e) => { e.stopPropagation(); onDeleteBrand(brand.id); }} className="p-2 text-slate-600 hover:text-red-400"><Trash2 size={16} /></button>
               </div>
             </div>
           ))
         )}
 
-        {viewMode === 'template' && (
-          filteredRefs.map(ref => (
-            <div key={ref.id} onClick={() => setSelectedRef(ref)} className="group rounded-[2.5rem] border border-slate-800 bg-slate-900/40 overflow-hidden hover:border-blue-500/40 transition-all cursor-pointer">
-              <div className="aspect-[4/5] bg-black"><img src={ref.templateImage || ref.imageSource} className="w-full h-full object-cover opacity-80" alt={ref.name} /></div>
-              <div className="p-5 flex items-center justify-between border-t border-slate-800/50">
-                <h4 className="font-bold text-white truncate">{ref.name}</h4>
-                <button onClick={(e) => { e.stopPropagation(); onDelete(ref.id); }} className="p-2 text-slate-600 hover:text-red-400"><Trash2 size={16} /></button>
+        {viewMode === 'original' && (
+          filteredRefs.length === 0 ? <EmptyState icon={<History size={64} />} label="No original references saved." /> :
+            filteredRefs.map(ref => (
+              <div key={ref.id} onClick={() => setSelectedRef(ref)} className="group rounded-[2.5rem] border border-slate-800 bg-slate-900/40 overflow-hidden hover:border-indigo-500/40 transition-all cursor-pointer">
+                <div className="aspect-[4/5] bg-black">
+                  <img src={ref.imageSource} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt={ref.name} />
+                  <div className="absolute top-4 right-4"><span className="px-2 py-1 rounded-md bg-indigo-500/20 text-indigo-400 text-[8px] font-bold border border-indigo-500/30 uppercase">Source DNA</span></div>
+                </div>
+                <div className="p-5 flex items-center justify-between border-t border-slate-800/50">
+                  <h4 className="font-bold text-white truncate">{ref.name}</h4>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(ref.id); }} className="p-2 text-slate-600 hover:text-red-400"><Trash2 size={16} /></button>
+                </div>
               </div>
-            </div>
-          ))
+            ))
+        )}
+
+        {viewMode === 'template' && (
+          filteredRefs.length === 0 ? <EmptyState icon={<LayoutTemplate size={64} />} label="No blueprints generated yet." /> :
+            filteredRefs.map(ref => (
+              <div key={ref.id} onClick={() => setSelectedRef(ref)} className="group rounded-[2.5rem] border border-slate-800 bg-slate-900/40 overflow-hidden hover:border-blue-500/40 transition-all cursor-pointer">
+                <div className="aspect-[4/5] bg-black">
+                  {ref.templateImage ? (
+                    <img src={ref.templateImage} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt={ref.name} />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-slate-700 bg-slate-950 p-6 text-center">
+                      <Zap size={32} className="mb-3 opacity-20" />
+                      <p className="text-[10px] font-mono uppercase tracking-widest opacity-40">Layout Only</p>
+                    </div>
+                  )}
+                  <div className="absolute top-4 right-4"><span className="px-2 py-1 rounded-md bg-blue-500/20 text-blue-400 text-[8px] font-bold border border-blue-500/30 uppercase">Structure BP</span></div>
+                </div>
+                <div className="p-5 flex items-center justify-between border-t border-slate-800/50">
+                  {editingId === ref.id ? (
+                    <input
+                      autoFocus
+                      className="bg-slate-800 text-white text-sm px-2 py-1 rounded outline-none focus:ring-1 focus:ring-blue-500 w-full"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={(e) => handleEditSave('ref', ref, e)}
+                      onKeyDown={(e) => handleEditSave('ref', ref, e)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <h4 className="font-bold text-white truncate text-sm">{ref.name}</h4>
+                  )}
+                  <div className="flex items-center">
+                    <button onClick={(e) => handleEditStart(ref.id, ref.name, e)} className="p-2 text-slate-600 hover:text-blue-400"><FileCode size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(ref.id); }} className="p-2 text-slate-600 hover:text-red-400"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              </div>
+            ))
         )}
       </div>
 
@@ -203,9 +289,15 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
 
                 <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-slate-800 shadow-2xl space-y-8">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-3"><MessageSquare size={20} className="text-green-400" /><span className="text-sm font-bold uppercase tracking-widest text-slate-400">Visual Retouch Engine</span></div>
+                    <div className="flex items-center space-x-3 text-green-400 font-bold text-[10px] uppercase tracking-widest"><MessageSquare size={14} /><span>Human Guidance</span></div>
                     <div className="flex items-center space-x-3">
-                      <button onClick={() => setIsAnnotation(!isAnnotation)} className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${isAnnotation ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}><Eye size={12} /><span>ANNOTATION MODE</span></button>
+                      <button
+                        onClick={() => setIsAnnotating(true)}
+                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${annotationSketch ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}
+                      >
+                        <Target size={12} />
+                        <span>{annotationSketch ? 'SKECH READY' : 'DRAW FEEDBACK'}</span>
+                      </button>
                       <button onClick={() => retouchFileRef.current?.click()} className={`flex items-center space-x-2 px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${retouchRefImg ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-slate-800 border-slate-700 text-slate-500'}`}><ImageIcon size={12} /><span>REF IMAGE</span></button>
                       <input type="file" ref={retouchFileRef} onChange={handleRefImgUpload} className="hidden" accept="image/*" />
                     </div>
@@ -220,8 +312,10 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
                   )}
 
                   <div className="flex space-x-3">
-                    <input type="text" placeholder={isAnnotation ? "e.g. 'Shift the headline 20px down', 'Resize logo block'..." : "e.g. 'Add a neon glow to the background', 'Change text to bold navy'..."} className="flex-1 bg-slate-800 border border-slate-700 rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-green-500/50" value={retouchInput} onChange={(e) => setRetouchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleRetouch()} />
-                    <button onClick={handleRetouch} disabled={!retouchInput || isProcessing} className="bg-green-600 hover:bg-green-500 disabled:opacity-50 p-4 rounded-2xl transition-all active:scale-90 text-white shadow-xl"><Send size={24} /></button>
+                    <input type="text" placeholder={annotationSketch ? "Describe what you drew..." : "e.g. 'Add a neon glow to the background', 'Change text to bold navy'..."} className="flex-1 bg-slate-800 border border-slate-700 rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-green-500/50 text-sm" value={retouchInput} onChange={(e) => setRetouchInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleRetouch()} />
+                    <button onClick={handleRetouch} disabled={!retouchInput || isProcessing} className="bg-green-600 hover:bg-green-500 disabled:opacity-50 p-4 rounded-2xl transition-all active:scale-90 text-white shadow-xl flex items-center justify-center min-w-[64px]">
+                      {isProcessing ? <Loader2 className="animate-spin" size={24} /> : <Send size={24} />}
+                    </button>
                   </div>
 
                   {studioError && <div className="flex items-center space-x-3 text-red-400 text-sm p-4 rounded-2xl bg-red-500/10 border border-red-500/20"><AlertCircle size={18} /><p>{studioError}</p></div>}
@@ -261,12 +355,194 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
         </div>
       )}
 
-      {/* DETAIL MODALS (ORIGINALS/TEMPLATES/BRANDS) - Simplified for length, keeping structure */}
-      {selectedRef && <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-2xl p-6 overflow-y-auto flex items-center justify-center" onClick={() => setSelectedRef(null)}><div className="max-w-2xl bg-slate-900 p-8 rounded-[3rem] border border-slate-800" onClick={e => e.stopPropagation()}><img src={selectedRef.imageSource} className="rounded-2xl mb-6 max-h-[70vh] w-full object-contain" /><h2 className="text-2xl font-bold">{selectedRef.name}</h2></div></div>}
-      {selectedBrand && <div className="fixed inset-0 z-[100] bg-black/98 backdrop-blur-2xl p-6 overflow-y-auto flex items-center justify-center" onClick={() => setSelectedBrand(null)}><div className="max-w-2xl bg-slate-900 p-8 rounded-[3rem] border border-slate-800" onClick={e => e.stopPropagation()}><img src={selectedBrand.imageSource} className="rounded-2xl mb-6 max-h-[70vh] w-full object-contain" /><h2 className="text-2xl font-bold">{selectedBrand.name}</h2></div></div>}
+      {/* DETAIL MODALS (ORIGINALS/TEMPLATES/BRANDS) */}
+      {selectedRef && (
+        <div className="fixed inset-0 z-[100] bg-[#020617] backdrop-blur-3xl overflow-y-auto animate-in fade-in duration-300">
+          <div className="max-w-7xl mx-auto px-6 py-12">
+            <div className="flex items-center justify-between mb-12 border-b border-slate-800 pb-8">
+              <div className="flex items-center space-x-6">
+                <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 shadow-2xl"><LayoutTemplate size={32} className="text-blue-400" /></div>
+                <div>
+                  <h2 className="text-4xl font-bold text-white">{selectedRef.name}</h2>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.4em] mt-2">Blueprint DNA Registry</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedRef(null)} className="px-8 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 transition-all font-bold text-slate-300">Close Registry</button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+              <div className="lg:col-span-6 space-y-8">
+                <div className="rounded-[3rem] overflow-hidden border border-slate-800 bg-black aspect-[4/5] shadow-2xl flex items-center justify-center p-4">
+                  <img src={selectedRef.templateImage || selectedRef.imageSource} className="max-w-full max-h-full object-contain" alt="Render" />
+                </div>
+                {selectedRef.templateImage && (
+                  <div className="p-8 rounded-[2rem] bg-slate-900/50 border border-slate-800">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Source Comparison</h4>
+                    <div className="aspect-video rounded-xl overflow-hidden border border-slate-800 grayscale opacity-40 hover:grayscale-0 hover:opacity-100 transition-all cursor-crosshair">
+                      <img src={selectedRef.imageSource} className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="lg:col-span-6 space-y-8">
+                <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-slate-800 shadow-2xl space-y-8">
+                  <div className="flex items-center space-x-3 border-b border-slate-800 pb-4">
+                    <Terminal size={18} className="text-blue-400" />
+                    <h3 className="text-lg font-bold tracking-tight">Machine DNA Data</h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <VariableBox icon={<Zap size={14} className="text-yellow-400" />} label="Archetype" value={selectedRef.jsonSpec.structural_rules.layout_archetype} />
+                    <VariableBox icon={<Grid size={14} className="text-indigo-400" />} label="Composition" value={selectedRef.jsonSpec.structural_rules.composition_map} />
+                    <VariableBox icon={<Palette size={14} className="text-pink-400" />} label="Aesthetics" value={selectedRef.jsonSpec.structural_rules.aesthetic_motifs} />
+                    <VariableBox icon={<TypeIcon size={14} className="text-cyan-400" />} label="Typography" value={selectedRef.jsonSpec.structural_rules.typography_system} />
+                  </div>
+
+                  <div className="space-y-4 pt-4">
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Visual DNA Prompt</h4>
+                    <div className="p-6 rounded-2xl bg-slate-950/50 border border-slate-800 font-mono text-xs text-blue-400/80 leading-relaxed italic">
+                      "{selectedRef.jsonSpec.base_visual_dna_prompt}"
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Layout Constraints</h4>
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2 text-xs text-slate-400">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                        <span>Forbidden: {selectedRef.jsonSpec.layout_constraints.forbidden_elements.join(', ') || 'None'}</span>
+                      </div>
+                      <div className="flex items-center space-x-2 text-xs text-slate-400">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                        <span>Mandatory: {selectedRef.jsonSpec.layout_constraints.mandatory_anchors.join(', ') || 'None'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-slate-800 shadow-2xl">
+                  <div className="flex items-center space-x-3 mb-6">
+                    <History size={18} className="text-indigo-400" />
+                    <h3 className="text-lg font-bold">Metadata</h3>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Stored On</span>
+                      <span className="text-slate-300">{new Date(selectedRef.createdAt).toLocaleString()}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Native Aspect Ratio</span>
+                      <span className="text-slate-300 font-bold">{selectedRef.aspectRatio}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500">Registry ID</span>
+                      <span className="text-slate-300 font-mono">#BP-{selectedRef.id.slice(-6)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedBrand && (
+        <div className="fixed inset-0 z-[100] bg-[#020617] backdrop-blur-3xl overflow-y-auto animate-in fade-in duration-300">
+          <div className="max-w-7xl mx-auto px-6 py-12">
+            <div className="flex items-center justify-between mb-12 border-b border-slate-800 pb-8">
+              <div className="flex items-center space-x-6">
+                <div className="p-4 rounded-2xl bg-pink-500/10 border border-pink-500/20 shadow-2xl"><Palette size={32} className="text-pink-400" /></div>
+                <div>
+                  <h2 className="text-4xl font-bold text-white">{selectedBrand.name}</h2>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-[0.4em] mt-2">Brand DNA Profile</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedBrand(null)} className="px-8 py-3.5 rounded-2xl bg-slate-800 hover:bg-slate-700 transition-all font-bold text-slate-300">Close Profile</button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+              <div className="lg:col-span-5">
+                <div className="rounded-[3rem] bg-slate-950 border border-slate-800 aspect-square flex items-center justify-center p-12 shadow-2xl">
+                  <img src={selectedBrand.imageSource} className="max-w-full max-h-full object-contain" alt="Logo" />
+                </div>
+              </div>
+
+              <div className="lg:col-span-7 space-y-8">
+                <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-slate-800 shadow-2xl space-y-8">
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Brand Vibe</h4>
+                      <p className="text-xl font-bold text-pink-400">{selectedBrand.dna.brand_vibe}</p>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Color Logic</h4>
+                      <p className="text-sm text-slate-300 leading-relaxed">{selectedBrand.dna.color_logic}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Primary Palette</h4>
+                    <div className="flex flex-wrap gap-4">
+                      {selectedBrand.dna.primary_colors.map((color, idx) => (
+                        <div key={idx} className="flex items-center space-x-3 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                          <div className="w-10 h-10 rounded-xl shadow-inner border border-white/10" style={{ backgroundColor: color }} />
+                          <span className="text-xs font-mono text-slate-400 uppercase">{color}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Typography Systems</h4>
+                    <p className="text-sm text-slate-400 italic bg-slate-950/50 p-4 rounded-xl border border-slate-800">
+                      {selectedBrand.dna.typography_notes}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-10 rounded-[3rem] bg-slate-900/50 border border-slate-800 shadow-2xl">
+                  <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Forbidden Styles</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedBrand.dna.forbidden_styles.map((style, idx) => (
+                      <span key={idx} className="px-4 py-2 rounded-xl bg-red-500/5 border border-red-500/20 text-red-400 text-[10px] font-bold uppercase">
+                        NO {style}
+                      </span>
+                    ))}
+                    {selectedBrand.dna.forbidden_styles.length === 0 && <span className="text-xs text-slate-600 italic">No restrictions saved.</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isAnnotating && selectedPost && (
+        <AnnotationCanvas
+          imageSource={selectedPost.imageSource}
+          onCancel={() => setIsAnnotating(false)}
+          onSave={(sketch) => {
+            setAnnotationSketch(sketch);
+            setIsAnnotating(false);
+          }}
+        />
+      )}
     </div>
   );
 };
+
+const VariableBox = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) => (
+  <div className="p-6 rounded-2xl bg-slate-800/40 border border-slate-700/30 flex flex-col space-y-3 transition-all">
+    <div className="flex items-center space-x-2">
+      {icon}
+      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</span>
+    </div>
+    <p className="text-sm font-medium text-slate-200 leading-relaxed capitalize">
+      {value || 'N/A'}
+    </p>
+  </div>
+);
 
 const EmptyState = ({ icon, label }: any) => (
   <div className="col-span-full py-32 text-center border-2 border-dashed border-slate-800 rounded-[3rem] bg-slate-900/20 flex flex-col items-center">

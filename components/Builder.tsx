@@ -319,6 +319,27 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
               />
             </div>
 
+            <div className="mt-12 space-y-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2 rounded-lg bg-orange-500/10">
+                  <Terminal size={18} className="text-orange-400" />
+                </div>
+                <h3 className="text-lg font-bold tracking-tight">Content Inventory Registry</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {result.json.content_registry.map((field, idx) => (
+                  <div key={idx} className="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/30 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{field.label}</span>
+                      <span className="text-[8px] px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 uppercase font-bold">{field.type}</span>
+                    </div>
+                    <p className="text-xs text-slate-300 italic">"{field.placeholder}"</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="mt-8 p-6 rounded-2xl bg-slate-950/50 border border-slate-800/80 font-mono text-xs text-blue-400/70 overflow-x-auto">
               <p className="mb-2 opacity-50 uppercase tracking-widest text-[10px] font-bold">Generated Visual DNA Prompt</p>
               <p className="italic leading-relaxed">"{result.json.base_visual_dna_prompt}"</p>
