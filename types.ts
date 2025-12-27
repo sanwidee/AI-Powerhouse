@@ -1,6 +1,15 @@
 
 export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4';
 
+declare global {
+  interface Window {
+    aistudio: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
+
 export interface VisualStyle {
   layout_archetype: string;
   typography_system: string;

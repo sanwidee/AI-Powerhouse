@@ -3,12 +3,12 @@ import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { DesignPromptJson, ContentBrief, BrandDNA, AspectRatio } from "../types";
 
 const getAI = () => {
-  // Priority 1: Environment variable (AI Studio)
+  // Priority 1: Vite Environment variable (Local Dev)
   // Priority 2: Session Storage (Stand-alone/GitHub Pages)
-  const key = process.env.API_KEY || sessionStorage.getItem('IKHSAN_LAB_KEY');
+  const key = import.meta.env.VITE_GEMINI_API_KEY || sessionStorage.getItem('IKHSAN_LAB_KEY');
   
   if (!key) {
-    throw new Error("No API Key found. Please configure your key in settings.");
+    throw new Error("No API Key found. Please configure your key in settings or .env file.");
   }
   
   return new GoogleGenAI({ apiKey: key });

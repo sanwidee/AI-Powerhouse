@@ -18,26 +18,62 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const checkKey = async () => {
-      // Check if we are inside Google AI Studio
       if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
         const selected = await window.aistudio.hasSelectedApiKey();
         setHasKey(selected);
         setIsStandalone(false);
       } else {
-        // We are on GitHub Pages or local
         setIsStandalone(true);
+        const envKey = import.meta.env.VITE_GEMINI_API_KEY;
         const savedKey = sessionStorage.getItem('IKHSAN_LAB_KEY');
-        setHasKey(!!savedKey);
+        setHasKey(!!(envKey || savedKey));
       }
     };
     checkKey();
 
-    const savedRefs = localStorage.getItem('ikhsan_design_refs');
-    const savedBrands = localStorage.getItem('ikhsan_brand_refs');
-    const savedPosts = localStorage.getItem('ikhsan_generated_posts');
-    if (savedRefs) setReferences(JSON.parse(savedRefs));
-    if (savedBrands) setBrands(JSON.parse(savedBrands));
-    if (savedPosts) setGeneratedPosts(JSON.parse(savedPosts));
+    const loadData = async () => {
+      try {
+        const resRefs = await fetch('/api/references');
+        const resBrands = await fetch('/api/brands');
+        const resPosts = await fetch('/api/posts');
+
+        const remoteRefs = await resRefs.json();
+        const remoteBrands = await resBrands.json();
+        const remotePosts = await resPosts.json();
+
+        // Migration Check
+        const localRefs = localStorage.getItem('ikhsan_design_refs');
+        const localBrands = localStorage.getItem('ikhsan_brand_refs');
+        const localPosts = localStorage.getItem('ikhsan_generated_posts');
+
+        if (localRefs || localBrands || localPosts) {
+          console.log("Migration detected. Merging local data to disk...");
+          const migratedRefs = [...remoteRefs, ...(localRefs ? JSON.parse(localRefs) : [])];
+          const migratedBrands = [...remoteBrands, ...(localBrands ? JSON.parse(localBrands) : [])];
+          const migratedPosts = [...remotePosts, ...(localPosts ? JSON.parse(localPosts) : [])];
+
+          await fetch('/api/references', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migratedRefs) });
+          await fetch('/api/brands', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migratedBrands) });
+          await fetch('/api/posts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(migratedPosts) });
+
+          setReferences(migratedRefs);
+          setBrands(migratedBrands);
+          setGeneratedPosts(migratedPosts);
+
+          localStorage.removeItem('ikhsan_design_refs');
+          localStorage.removeItem('ikhsan_brand_refs');
+          localStorage.removeItem('ikhsan_generated_posts');
+          console.log("Migration complete.");
+        } else {
+          setReferences(remoteRefs);
+          setBrands(remoteBrands);
+          setGeneratedPosts(remotePosts);
+        }
+      } catch (err) {
+        console.error("Failed to load data from storage server:", err);
+      }
+    };
+    loadData();
   }, []);
 
   const handleOpenKey = async () => {
@@ -52,46 +88,58 @@ const App: React.FC = () => {
     }
   };
 
+  const saveData = async (collection: string, data: any) => {
+    try {
+      await fetch(`/api/${collection}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+    } catch (err) {
+      console.error(`Failed to save ${collection}:`, err);
+    }
+  };
+
   const saveReference = (ref: DesignReference) => {
     const updated = [ref, ...references];
     setReferences(updated);
-    localStorage.setItem('ikhsan_design_refs', JSON.stringify(updated));
+    saveData('references', updated);
   };
 
   const saveBrand = (brand: BrandReference) => {
     const updated = [brand, ...brands];
     setBrands(updated);
-    localStorage.setItem('ikhsan_brand_refs', JSON.stringify(updated));
+    saveData('brands', updated);
   };
 
   const saveGeneratedPost = (post: GeneratedPost) => {
     const updated = [post, ...generatedPosts];
     setGeneratedPosts(updated);
-    localStorage.setItem('ikhsan_generated_posts', JSON.stringify(updated));
+    saveData('posts', updated);
   };
 
   const updateGeneratedPost = (post: GeneratedPost) => {
     const updated = generatedPosts.map(p => p.id === post.id ? post : p);
     setGeneratedPosts(updated);
-    localStorage.setItem('ikhsan_generated_posts', JSON.stringify(updated));
+    saveData('posts', updated);
   };
 
   const deleteReference = (id: string) => {
     const updated = references.filter(r => r.id !== id);
     setReferences(updated);
-    localStorage.setItem('ikhsan_design_refs', JSON.stringify(updated));
+    saveData('references', updated);
   };
 
   const deleteBrand = (id: string) => {
     const updated = brands.filter(b => b.id !== id);
     setBrands(updated);
-    localStorage.setItem('ikhsan_brand_refs', JSON.stringify(updated));
+    saveData('brands', updated);
   };
 
   const deleteGeneratedPost = (id: string) => {
     const updated = generatedPosts.filter(p => p.id !== id);
     setGeneratedPosts(updated);
-    localStorage.setItem('ikhsan_generated_posts', JSON.stringify(updated));
+    saveData('posts', updated);
   };
 
   if (hasKey === false) {
@@ -105,14 +153,14 @@ const App: React.FC = () => {
           </div>
           <h2 className="text-3xl font-bold mb-4">Activation Required</h2>
           <p className="text-slate-400 mb-8 text-sm leading-relaxed">
-            {isStandalone 
-              ? "Stand-alone mode detected. Please enter your Gemini API key to activate the Production Lab." 
+            {isStandalone
+              ? "Stand-alone mode detected. Please enter your Gemini API key to activate the Production Lab."
               : "Studio mode detected. This lab requires a paid API key from your Google Cloud project."}
           </p>
 
           {isStandalone ? (
             <div className="space-y-4 mb-8">
-              <input 
+              <input
                 type="password"
                 placeholder="Paste API Key here..."
                 className="w-full px-6 py-4 bg-slate-800 border border-slate-700 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 text-sm font-mono"
@@ -123,13 +171,13 @@ const App: React.FC = () => {
             </div>
           ) : (
             <div className="mb-8">
-               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-xs flex items-center justify-center gap-2">
+              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline text-xs flex items-center justify-center gap-2">
                 <Globe size={14} /> Review billing documentation
               </a>
             </div>
           )}
 
-          <button 
+          <button
             onClick={handleOpenKey}
             disabled={isStandalone && manualKey.trim().length < 20}
             className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
@@ -147,24 +195,24 @@ const App: React.FC = () => {
         return <Builder onSave={saveReference} onBack={() => setActiveTool(AppTool.LANDING)} />;
       case AppTool.LIBRARY:
         return (
-          <Library 
-            references={references} 
+          <Library
+            references={references}
             brands={brands}
             generatedPosts={generatedPosts}
-            onDelete={deleteReference} 
+            onDelete={deleteReference}
             onDeleteBrand={deleteBrand}
             onDeletePost={deleteGeneratedPost}
             onUpdatePost={updateGeneratedPost}
-            onBack={() => setActiveTool(AppTool.LANDING)} 
+            onBack={() => setActiveTool(AppTool.LANDING)}
           />
         );
       case AppTool.GENERATOR:
         return (
-          <Generator 
-            references={references} 
-            brands={brands} 
+          <Generator
+            references={references}
+            brands={brands}
             onSavePost={saveGeneratedPost}
-            onBack={() => setActiveTool(AppTool.LANDING)} 
+            onBack={() => setActiveTool(AppTool.LANDING)}
           />
         );
       case AppTool.BRAND_LAB:
@@ -191,7 +239,7 @@ const App: React.FC = () => {
 
             {isStandalone && (
               <div className="mt-16 pt-8 border-t border-slate-800 text-center">
-                <button 
+                <button
                   onClick={() => { sessionStorage.removeItem('IKHSAN_LAB_KEY'); window.location.reload(); }}
                   className="text-[10px] font-bold text-slate-600 hover:text-red-400 uppercase tracking-widest transition-colors"
                 >

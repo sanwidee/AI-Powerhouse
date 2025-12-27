@@ -17,7 +17,7 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
   const [intensity, setIntensity] = useState<RemixIntensity>('strict');
   const [carouselMode, setCarouselMode] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  
+
   const [brief, setBrief] = useState<ContentBrief>({
     topic: '',
     elements_to_display: '',
@@ -27,7 +27,7 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
     slide_number: 1,
     total_slides: 5
   });
-  
+
   const [loading, setLoading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [resultText, setResultText] = useState<string | null>(null);
@@ -46,7 +46,7 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
     setRemixImage(null);
     setError(null);
     setIsSaved(false);
-    
+
     const finalBrief: ContentBrief = {
       ...brief,
       slide_number: carouselMode ? brief.slide_number : undefined,
@@ -55,13 +55,13 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
 
     try {
       const { report, finalVisualPrompt } = await generatePostFromReference(
-        selectedRef.jsonSpec, 
-        finalBrief, 
-        intensity, 
+        selectedRef.jsonSpec,
+        finalBrief,
+        intensity,
         selectedBrand?.dna
       );
       setResultText(report);
-      
+
       if (finalVisualPrompt) {
         setImageLoading(true);
         const img = await generateRemixImage(finalVisualPrompt, brief.aspectRatio);
@@ -81,7 +81,13 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
       id: Date.now().toString(),
       name: `${brief.topic} - Remix`,
       imageSource: remixImage,
-      history: [], // History starts empty; log is created upon first retouch in Library
+      history: [{
+        id: 'original',
+        timestamp: Date.now(),
+        instruction: 'Original Generation',
+        image: remixImage,
+        type: 'text'
+      }],
       blueprintId: selectedRef.id,
       brandId: selectedBrandId || undefined,
       aspectRatio: brief.aspectRatio,
@@ -143,11 +149,11 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
                   <span>{carouselMode ? 'CAROUSEL ON' : 'CAROUSEL OFF'}</span>
                 </button>
               </div>
-              <input type="text" placeholder="Main Topic / Headline..." className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none" value={brief.topic} onChange={(e) => setBrief({...brief, topic: e.target.value})} />
-              <textarea placeholder="Specific Elements / Copy..." rows={2} className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none" value={brief.elements_to_display} onChange={(e) => setBrief({...brief, elements_to_display: e.target.value})} />
-              
+              <input type="text" placeholder="Main Topic / Headline..." className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none" value={brief.topic} onChange={(e) => setBrief({ ...brief, topic: e.target.value })} />
+              <textarea placeholder="Specific Elements / Copy..." rows={2} className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500/50 outline-none" value={brief.elements_to_display} onChange={(e) => setBrief({ ...brief, elements_to_display: e.target.value })} />
+
               <div className="grid grid-cols-2 gap-4">
-                <select value={brief.aspectRatio} onChange={(e) => setBrief({...brief, aspectRatio: e.target.value as AspectRatio})} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-xs outline-none">
+                <select value={brief.aspectRatio} onChange={(e) => setBrief({ ...brief, aspectRatio: e.target.value as AspectRatio })} className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-3 text-xs outline-none">
                   <option value="1:1">1:1 Square</option>
                   <option value="4:3">4:3 Slide</option>
                   <option value="3:4">3:4 Portrait</option>
@@ -163,8 +169,8 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
 
               {carouselMode && (
                 <div className="p-4 rounded-2xl bg-indigo-500/5 border border-indigo-500/20 grid grid-cols-2 gap-4">
-                   <input type="number" min="1" className="w-full bg-slate-800/50 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs text-indigo-300" value={brief.slide_number} onChange={(e) => setBrief({...brief, slide_number: parseInt(e.target.value)})} />
-                   <input type="number" min="1" className="w-full bg-slate-800/50 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs text-indigo-300" value={brief.total_slides} onChange={(e) => setBrief({...brief, total_slides: parseInt(e.target.value)})} />
+                  <input type="number" min="1" className="w-full bg-slate-800/50 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs text-indigo-300" value={brief.slide_number} onChange={(e) => setBrief({ ...brief, slide_number: parseInt(e.target.value) })} />
+                  <input type="number" min="1" className="w-full bg-slate-800/50 border border-indigo-500/20 rounded-lg px-3 py-2 text-xs text-indigo-300" value={brief.total_slides} onChange={(e) => setBrief({ ...brief, total_slides: parseInt(e.target.value) })} />
                 </div>
               )}
             </div>
@@ -183,8 +189,8 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
             <div className="space-y-6">
               <div className="bg-slate-900/80 backdrop-blur-md rounded-[2rem] p-8 border border-slate-800 shadow-2xl">
                 <div className="aspect-square relative rounded-2xl overflow-hidden bg-black border border-slate-800 mb-6 flex items-center justify-center">
-                   {remixImage ? <img src={remixImage} className="w-full h-full object-contain" alt="Result" /> : <div className="text-slate-700 font-mono text-xs uppercase tracking-widest">Render Pending...</div>}
-                   {imageLoading && <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-10"><Zap className="animate-bounce text-indigo-400" size={32} /></div>}
+                  {remixImage ? <img src={remixImage} className="w-full h-full object-contain" alt="Result" /> : <div className="text-slate-700 font-mono text-xs uppercase tracking-widest">Render Pending...</div>}
+                  {imageLoading && <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-10"><Zap className="animate-bounce text-indigo-400" size={32} /></div>}
                 </div>
 
                 <div className="flex gap-4">
@@ -207,9 +213,9 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
               </div>
             </div>
           ) : (
-             <div className="h-[600px] border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-slate-600 text-center p-12">
-               <Zap size={48} className="mb-6 opacity-10" /><h3 className="text-xl font-bold text-slate-400 mb-2">Synthesis Chamber Ready</h3>
-             </div>
+            <div className="h-[600px] border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-slate-600 text-center p-12">
+              <Zap size={48} className="mb-6 opacity-10" /><h3 className="text-xl font-bold text-slate-400 mb-2">Synthesis Chamber Ready</h3>
+            </div>
           )}
         </div>
       </div>
