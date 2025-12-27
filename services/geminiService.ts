@@ -2,7 +2,17 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { DesignPromptJson, ContentBrief, BrandDNA, AspectRatio } from "../types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+const getAI = () => {
+  // Priority 1: Environment variable (AI Studio)
+  // Priority 2: Session Storage (Stand-alone/GitHub Pages)
+  const key = process.env.API_KEY || sessionStorage.getItem('IKHSAN_LAB_KEY');
+  
+  if (!key) {
+    throw new Error("No API Key found. Please configure your key in settings.");
+  }
+  
+  return new GoogleGenAI({ apiKey: key });
+};
 
 const extractJsonFromText = (text: string): string => {
   const firstBrace = text.indexOf('{');
@@ -208,7 +218,7 @@ export const refinePostImage = async (
     parts.push({ inlineData: { mimeType: 'image/png', data: refImageB64.split(',')[1] || refImageB64 } });
   }
 
-  // ENHANCED RETOUCH PROTOCOL: Strict preservation of non-modified pixels
+  // ENHANCED RETOUCH PROTOCOL
   const baseInstruction = isAnnotation 
     ? "PERFORM STRUCTURAL CORRECTION ONLY. Lock all other pixels. Move or resize based on the instruction." 
     : "PERFORM SPECIFIC CONTENT EDIT ONLY. Preserve the exact layout, background, character, and aesthetic of the source image.";
@@ -239,9 +249,6 @@ export const refinePostImage = async (
     contents: { parts },
     config: { 
       imageConfig: { aspectRatio: ratio },
-      // Note: We cannot manually override the safety settings in this environment, 
-      // but a more restrictive "preservation" prompt significantly reduces safety refusals 
-      // by making the edit clearly non-malicious and structurally locked.
     }
   });
 
@@ -251,5 +258,5 @@ export const refinePostImage = async (
   for (const part of resultParts) {
     if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
   }
-  throw new Error("Refinement failed to render. Please try a simpler instruction or ensure the prompt is clear.");
+  throw new Error("Refinement failed to render.");
 };
