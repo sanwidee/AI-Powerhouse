@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
-import { Upload, Link as LinkIcon, Sparkles, Save, ArrowLeft, Loader2, Copy, Check, Info, Terminal, Image as ImageIcon, Zap, AlertCircle } from 'lucide-react';
+// Added missing Rocket import
+import { Upload, Sparkles, Save, ArrowLeft, Loader2, Terminal, Zap, AlertCircle, CheckCircle2, ChevronRight, XCircle, Code, Layers, Palette, Type as TypeIcon, Rocket } from 'lucide-react';
 import { analyzeDesign, generateTemplateImage } from '../services/geminiService';
-import { DesignReference, DesignPromptJson } from '../types';
+import { DesignReference, DesignPromptJson, AspectRatio } from '../types';
 
 interface BuilderProps {
   onSave: (ref: DesignReference) => void;
@@ -13,35 +14,39 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
   const [loading, setLoading] = useState(false);
   const [templateLoading, setTemplateLoading] = useState(false);
   const [image, setImage] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState('');
   const [notes, setNotes] = useState('');
+  const [ratio, setRatio] = useState<AspectRatio>('1:1');
   const [result, setResult] = useState<{ markdown: string, json: DesignPromptJson } | null>(null);
   const [templateImage, setTemplateImage] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setError(null);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result as string);
-      };
+      reader.onloadend = () => setImage(reader.result as string);
       reader.readAsDataURL(file);
     }
   };
 
   const handleAnalyze = async () => {
-    if (!image && !imageUrl) return;
+    if (!image) return;
     setLoading(true);
     setResult(null);
     setTemplateImage(null);
+    setError(null);
+    setIsSaved(false);
+    
     try {
-      const source = image || imageUrl;
-      const data = await analyzeDesign(source, notes);
+      const data = await analyzeDesign(image, notes);
+      if (!data.json || !data.markdown) throw new Error("Incomplete DNA extraction.");
       setResult(data);
-    } catch (error) {
-      alert("Error analyzing design. Ensure your API Key is valid.");
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "The lab couldn't decode this design DNA. Please try another image.");
     } finally {
       setLoading(false);
     }
@@ -50,11 +55,12 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
   const handleGenerateTemplate = async () => {
     if (!result) return;
     setTemplateLoading(true);
+    setError(null);
     try {
-      const generated = await generateTemplateImage(result.json.visual_prompt);
+      const generated = await generateTemplateImage(result.json, ratio);
       setTemplateImage(generated);
-    } catch (error) {
-      alert("Error generating visual template.");
+    } catch (err: any) {
+      setError("Visual validation failed. The layout engine encountered an error.");
     } finally {
       setTemplateLoading(false);
     }
@@ -62,224 +68,269 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
 
   const handleSave = () => {
     if (!result || !image) return;
-    const newRef: DesignReference = {
+    onSave({
       id: Date.now().toString(),
-      name: result.json.title || "Untitled Inspiration",
+      name: result.json.template_name || 'Untitled Blueprint',
       tags: [],
       imageSource: image,
       templateImage: templateImage || undefined,
       markdownBrief: result.markdown,
       jsonSpec: result.json,
+      aspectRatio: ratio,
       createdAt: Date.now(),
-    };
-    onSave(newRef);
-    alert("Saved to Inspiration Library with Visual DNA!");
-  };
-
-  const copyPrompt = () => {
-    if (result) {
-      navigator.clipboard.writeText(result.json.visual_prompt);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+    });
+    setIsSaved(true);
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="max-w-7xl mx-auto px-6 py-8 animate-in fade-in duration-500">
       <div className="flex items-center space-x-4 mb-8">
-        <button onClick={onBack} className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white transition-colors">
+        <button 
+          onClick={onBack} 
+          className="p-3 rounded-xl bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center"
+        >
           <ArrowLeft size={20} />
         </button>
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Design → Prompt Builder</h2>
-          <p className="text-slate-400">Deconstruct any visual design into structured AI logic.</p>
+          <h2 className="text-3xl font-bold tracking-tight">Design DNA Builder</h2>
+          <p className="text-slate-400">Deconstruct visuals into production logic.</p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Input Column */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="p-6 rounded-2xl border border-slate-800 bg-slate-900/50 space-y-6">
-            <h3 className="text-lg font-semibold flex items-center space-x-2">
-              <Upload size={18} className="text-blue-400" />
-              <span>Input Reference</span>
-            </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+        {/* INPUT COLUMN */}
+        <div className="lg:col-span-5 flex flex-col h-full">
+          <div className="p-6 rounded-[2rem] border border-slate-800 bg-slate-900/50 shadow-2xl space-y-6 relative overflow-hidden flex-1 flex flex-col justify-between">
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Step 1: Upload Source</label>
+                {!image ? (
+                  <div 
+                    onClick={() => fileInputRef.current?.click()} 
+                    className="aspect-video border-2 border-dashed border-slate-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/30 hover:border-blue-500/50 transition-all group active:scale-[0.99]"
+                  >
+                    <div className="p-4 rounded-full bg-slate-800/50 group-hover:scale-110 transition-transform">
+                      <Upload size={32} className="text-slate-500 group-hover:text-blue-400" />
+                    </div>
+                    <span className="text-sm text-slate-400 mt-4">Drop inspiration here</span>
+                    <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                  </div>
+                ) : (
+                  <div className="relative rounded-2xl overflow-hidden border border-slate-700 bg-black group aspect-video flex items-center justify-center">
+                    <img src={image} className="w-full h-full object-contain" alt="Ref" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <button 
+                        onClick={() => { setImage(null); setResult(null); setError(null); }}
+                        className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all active:scale-95"
+                      >
+                        Remove Image
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            {!image ? (
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-video rounded-xl border-2 border-dashed border-slate-700 bg-slate-900 flex flex-col items-center justify-center cursor-pointer hover:border-blue-500/50 hover:bg-blue-500/5 transition-all group"
-              >
-                <div className="p-4 rounded-full bg-slate-800 mb-4 group-hover:scale-110 transition-transform">
-                  <Upload size={32} className="text-slate-500 group-hover:text-blue-400" />
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Step 2: Focus Parameters</label>
+                <textarea 
+                  rows={4} 
+                  placeholder="Add context... (e.g., 'Focus only on the grid layout' or 'Ignore the illustration style')" 
+                  className="w-full p-4 bg-slate-800/50 border border-slate-700 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all placeholder:text-slate-600"
+                  value={notes} 
+                  onChange={(e) => setNotes(e.target.value)} 
+                />
+              </div>
+
+              {error && (
+                <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-start space-x-3 text-red-400 text-sm animate-in shake duration-300">
+                  <AlertCircle size={18} className="shrink-0 mt-0.5" />
+                  <p>{error}</p>
                 </div>
-                <p className="text-sm font-medium text-slate-400">Click to upload design image</p>
-                <p className="text-xs text-slate-600 mt-1">PNG, JPG up to 10MB</p>
-                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
-              </div>
-            ) : (
-              <div className="relative group rounded-xl overflow-hidden border border-slate-700 bg-black">
-                <img src={image} alt="Reference" className="w-full aspect-video object-contain" />
-                <button 
-                  onClick={() => setImage(null)}
-                  className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-lg text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  Change
-                </button>
-              </div>
-            )}
-
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
-                <LinkIcon size={16} />
-              </div>
-              <input 
-                type="text" 
-                placeholder="Or paste image URL..." 
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-800/50 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-400 ml-1">Optional Context Notes</label>
-              <textarea 
-                rows={3}
-                placeholder="E.g. Focus on the grainy texture and the layout of the floating elements..."
-                className="w-full p-4 bg-slate-800/50 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 text-sm resize-none"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-              />
+              )}
             </div>
 
             <button 
-              onClick={handleAnalyze}
-              disabled={loading || (!image && !imageUrl)}
-              className="w-full py-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-white transition-all flex items-center justify-center space-x-2 shadow-lg shadow-blue-900/20"
+              onClick={handleAnalyze} 
+              disabled={loading || !image} 
+              className={`w-full py-5 mt-6 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] shadow-lg ${
+                loading ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
+              }`}
             >
-              {loading ? <Loader2 size={20} className="animate-spin" /> : <Sparkles size={20} />}
-              <span>{loading ? 'Analyzing Architecture...' : 'Analyze DNA'}</span>
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  <span className="animate-pulse">DECODING DESIGN DNA...</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles size={20} className="text-blue-200" />
+                  <span>Analyze DNA</span>
+                </>
+              )}
             </button>
-          </div>
-          
-          <div className="p-6 rounded-2xl border border-blue-500/20 bg-blue-500/5">
-            <h4 className="flex items-center space-x-2 text-blue-400 font-semibold mb-2">
-              <Info size={16} />
-              <span>Lab Pro Tip</span>
-            </h4>
-            <p className="text-sm text-slate-400">
-              Generate the "Visual Template" before saving to store the placeholder mockup as a reference in your library.
-            </p>
           </div>
         </div>
 
-        {/* Output Column */}
-        <div className="lg:col-span-8 space-y-6">
+        {/* OUTPUT COLUMN */}
+        <div className="lg:col-span-7 h-full flex flex-col">
           {result ? (
-            <div className="space-y-6 animate-in slide-in-from-right-4 duration-500">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-blue-400 neon-text">Analysis Complete</h3>
-                <div className="flex items-center space-x-2">
-                  <button 
-                    onClick={copyPrompt}
-                    className="flex items-center space-x-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors border border-slate-700"
-                  >
-                    {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} />}
-                    <span>{copied ? 'Copied' : 'Copy Visual Prompt'}</span>
-                  </button>
-                  <button 
-                    onClick={handleSave}
-                    className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-sm font-medium text-white transition-all shadow-lg ${templateImage ? 'bg-green-600 hover:bg-green-500 shadow-green-900/10' : 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/10'}`}
-                  >
-                    <Save size={16} />
-                    <span>{templateImage ? 'Save DNA + Template' : 'Save DNA Only'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Template Validation Row */}
-              <div className="p-1 rounded-2xl bg-gradient-to-r from-blue-500/20 via-indigo-500/20 to-cyan-500/20">
-                <div className="bg-slate-900 rounded-2xl p-6 border border-slate-800/50">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                    <div>
-                      <h4 className="text-lg font-bold flex items-center space-x-2 text-white">
-                        <ImageIcon size={20} className="text-indigo-400" />
-                        <span>Design Template Validation</span>
-                      </h4>
-                      <p className="text-sm text-slate-400 mt-1">Generate a placeholder mockup to store in your reference vault.</p>
+            <div className="animate-in slide-in-from-bottom-4 duration-500 flex flex-col h-full space-y-6 flex-1">
+              <div className="bg-slate-900/80 backdrop-blur-md rounded-[2rem] p-8 border border-slate-800 shadow-2xl flex-1 flex flex-col">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                  <div>
+                    <div className="flex items-center space-x-2 mb-1">
+                      <CheckCircle2 size={16} className="text-green-500" />
+                      <h4 className="font-bold text-lg">DNA Synthesis Complete</h4>
                     </div>
-                    <button 
-                      onClick={handleGenerateTemplate}
-                      disabled={templateLoading}
-                      className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-bold text-white transition-all shadow-lg shadow-indigo-900/30"
+                    <p className="text-sm text-slate-500 italic">Extracted: {result.json?.template_name || 'Unknown Blueprint'}</p>
+                  </div>
+                  
+                  <div className="flex items-center space-x-3 bg-slate-800/50 p-2 rounded-2xl border border-slate-700/50">
+                    <select 
+                      value={ratio} 
+                      onChange={(e) => setRatio(e.target.value as AspectRatio)} 
+                      className="bg-transparent text-xs font-bold text-slate-300 outline-none px-2 cursor-pointer"
                     >
-                      {templateLoading ? <Loader2 size={18} className="animate-spin" /> : <Zap size={18} fill="currentColor" />}
-                      <span>{templateLoading ? 'Rendering...' : 'Generate Visual Template'}</span>
+                      {['1:1', '9:16', '16:9', '4:3', '3:4'].map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
+                    </select>
+                    <button 
+                      onClick={handleGenerateTemplate} 
+                      disabled={templateLoading}
+                      className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-all active:scale-95 flex items-center space-x-2"
+                    >
+                      {templateLoading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                      <span>{templateLoading ? 'Rendering...' : 'Validate Layout'}</span>
                     </button>
                   </div>
-
-                  <div className="aspect-video relative rounded-xl overflow-hidden bg-[#0a0f1d] border border-slate-800 flex items-center justify-center">
-                    {templateImage ? (
-                      <img src={templateImage} alt="Generated Template" className="w-full h-full object-contain" />
-                    ) : (
-                      <div className="text-center p-8 space-y-3 opacity-40">
-                        <Terminal size={40} className="mx-auto mb-2" />
-                        <p className="text-xs font-mono uppercase tracking-widest">Awaiting Lab Validation Run</p>
-                      </div>
-                    )}
-                    {templateLoading && (
-                      <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center space-y-4">
-                        <div className="relative">
-                          <Loader2 size={48} className="text-indigo-500 animate-spin" />
-                          <Sparkles size={20} className="absolute top-0 right-0 text-indigo-300 animate-pulse" />
-                        </div>
-                        <p className="text-sm font-bold text-indigo-300 animate-pulse">Re-rendering DNA structure...</p>
-                      </div>
-                    )}
-                    {!templateLoading && !templateImage && (
-                      <div className="absolute bottom-4 flex items-center space-x-2 px-3 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/20 text-[10px] text-yellow-500 font-bold uppercase tracking-wider">
-                        <AlertCircle size={12} />
-                        <span>Run Validation to save complete DNA</span>
-                      </div>
-                    )}
-                  </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
-                  <div className="px-6 py-3 bg-slate-800/50 border-b border-slate-800 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Markdown Design Brief</span>
+                <div className="flex-1 min-h-[300px] bg-black rounded-[1.5rem] overflow-hidden border border-slate-800 flex items-center justify-center relative shadow-inner group">
+                  {templateImage ? (
+                    <img src={templateImage} className="w-full h-full object-contain animate-in zoom-in-95 duration-500" alt="Mockup" />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-slate-700 p-8 text-center">
+                      <Terminal size={48} className="mb-4 opacity-20" />
+                      <p className="text-sm font-mono uppercase tracking-widest opacity-40">Awaiting Validation Pulse</p>
+                    </div>
+                  )}
+                  {templateLoading && (
+                    <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-pulse z-10 text-center px-4">
+                       <Zap size={32} className="text-indigo-400 mb-4 animate-bounce" />
+                       <span className="text-xs font-bold text-indigo-300 tracking-[0.2em]">GENERATING VISUAL PROXY...</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-8">
+                  <div className="p-4 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Archetype</span>
+                    <p className="text-xs font-semibold text-blue-400">{result.json?.structural_rules?.layout_archetype || 'N/A'}</p>
                   </div>
-                  <div className="p-6 prose prose-invert prose-blue max-w-none text-slate-300 text-sm leading-relaxed max-h-[400px] overflow-y-auto">
-                    {result.markdown.split('\n').map((line, i) => (
-                      <p key={i} className="mb-2">{line}</p>
-                    ))}
+                  <div className="p-4 rounded-2xl bg-slate-800/30 border border-slate-700/50">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Typography</span>
+                    <p className="text-xs font-semibold text-slate-300 truncate">{result.json?.structural_rules?.typography_system || 'N/A'}</p>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-800 bg-slate-900 overflow-hidden">
-                   <div className="px-6 py-3 bg-slate-800/50 border-b border-slate-800">
-                    <span className="text-xs font-bold uppercase tracking-widest text-slate-500">JSON Spec Object</span>
-                  </div>
-                  <pre className="p-6 text-[11px] text-cyan-400 mono overflow-x-auto bg-[#0a0f1d] max-h-[400px]">
-                    {JSON.stringify(result.json, null, 2)}
-                  </pre>
-                </div>
+                <button 
+                  onClick={handleSave} 
+                  disabled={isSaved}
+                  className={`w-full mt-6 py-4 rounded-2xl font-bold transition-all active:scale-[0.98] flex items-center justify-center space-x-2 border shadow-lg ${
+                    isSaved 
+                      ? 'bg-green-500/10 border-green-500/50 text-green-400 cursor-default' 
+                      : 'bg-green-600 hover:bg-green-500 border-green-500/20 text-white shadow-green-900/20'
+                  }`}
+                >
+                  {isSaved ? (
+                    <>
+                      <CheckCircle2 size={20} />
+                      <span>Blueprint Saved to Library</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={20} />
+                      <span>Save DNA to Library</span>
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           ) : (
-            <div className="h-full min-h-[500px] rounded-2xl border-2 border-dashed border-slate-800 bg-slate-900/30 flex flex-col items-center justify-center text-slate-600">
-              <Terminal size={48} className="mb-4 opacity-20" />
-              <p className="text-lg font-medium">Awaiting DNA input...</p>
-              <p className="text-sm">Analysis results will appear here in real-time.</p>
+            <div className="h-full min-h-[500px] border border-slate-800 border-dashed rounded-[2rem] flex flex-col items-center justify-center text-slate-600 text-center p-12 transition-all">
+              <div className="relative mb-6">
+                <Zap size={64} className="opacity-5" />
+                {loading && <Loader2 size={64} className="absolute inset-0 animate-spin text-blue-500/30" />}
+              </div>
+              <h3 className="text-xl font-bold text-slate-400 mb-2">System Initialized</h3>
+              <p className="text-sm max-w-sm mx-auto leading-relaxed">
+                Upload a reference design to start the deconstruction sequence. The lab will extract layout, typography, and visual DNA.
+              </p>
             </div>
           )}
         </div>
       </div>
+
+      {/* DETAILED DNA REGISTRY OUTPUT */}
+      {result && (
+        <div className="mt-12 animate-in slide-in-from-bottom-8 duration-700">
+          <div className="p-8 rounded-[2rem] bg-slate-900/50 border border-slate-800/50 shadow-2xl">
+            <div className="flex items-center space-x-3 mb-8 border-b border-slate-800 pb-4">
+               <div className="p-2 rounded-lg bg-blue-500/10">
+                 <Code size={18} className="text-blue-400" />
+               </div>
+               <h3 className="text-lg font-bold tracking-tight">Machine DNA Registry</h3>
+               <span className="text-[10px] font-mono text-slate-500 ml-auto uppercase tracking-[0.3em]">PROMPT_VARIABLES_V2.0</span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+               <VariableBox 
+                icon={<Zap size={14} className="text-yellow-400" />} 
+                label="Archetype" 
+                value={result.json.structural_rules.layout_archetype} 
+               />
+               <VariableBox 
+                icon={<Layers size={14} className="text-indigo-400" />} 
+                label="Composition Map" 
+                value={result.json.structural_rules.composition_map} 
+               />
+               <VariableBox 
+                icon={<Palette size={14} className="text-pink-400" />} 
+                label="Aesthetic Motifs" 
+                value={result.json.structural_rules.aesthetic_motifs} 
+               />
+               <VariableBox 
+                icon={<TypeIcon size={14} className="text-cyan-400" />} 
+                label="Typography System" 
+                value={result.json.structural_rules.typography_system} 
+               />
+               <VariableBox 
+                icon={<Rocket size={14} className="text-green-400" />} 
+                label="Aspect Ratio" 
+                value={ratio} 
+               />
+            </div>
+            
+            <div className="mt-8 p-6 rounded-2xl bg-slate-950/50 border border-slate-800/80 font-mono text-xs text-blue-400/70 overflow-x-auto">
+               <p className="mb-2 opacity-50 uppercase tracking-widest text-[10px] font-bold">Generated Visual DNA Prompt</p>
+               <p className="italic leading-relaxed">"{result.json.base_visual_dna_prompt}"</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+const VariableBox = ({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) => (
+  <div className="p-5 rounded-2xl bg-slate-800/40 border border-slate-700/30 flex flex-col space-y-3 transition-all hover:border-slate-600 group">
+    <div className="flex items-center space-x-2">
+      {icon}
+      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{label}</span>
+    </div>
+    <p className="text-xs font-medium text-slate-200 leading-relaxed group-hover:text-white transition-colors capitalize">
+      {value || 'N/A'}
+    </p>
+  </div>
+);
 
 export default Builder;

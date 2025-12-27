@@ -1,10 +1,21 @@
 
+export type AspectRatio = '1:1' | '9:16' | '16:9' | '4:3' | '3:4';
+
 export interface VisualStyle {
   layout_archetype: string;
   typography_system: string;
   color_grammar: string;
-  composition_map: string; // 9-patch spatial map
+  composition_map: string;
   aesthetic_motifs: string;
+}
+
+export interface BrandDNA {
+  brand_name: string;
+  primary_colors: string[];
+  color_logic: string;
+  brand_vibe: string;
+  typography_notes: string;
+  forbidden_styles: string[];
 }
 
 export interface DesignPromptJson {
@@ -20,7 +31,7 @@ export interface DesignPromptJson {
     body_style: string;
     cta_style: string;
   };
-  base_visual_dna_prompt: string; // The "master prompt" that describes the vibe
+  base_visual_dna_prompt: string;
 }
 
 export interface ContentBrief {
@@ -28,6 +39,28 @@ export interface ContentBrief {
   elements_to_display: string;
   copy_instructions: string;
   target_audience: string;
+  aspectRatio: AspectRatio;
+  slide_number?: number;
+  total_slides?: number;
+}
+
+export interface RetouchHistory {
+  id: string;
+  timestamp: number;
+  instruction: string;
+  image: string;
+  type: 'text' | 'visual_reference' | 'annotation';
+}
+
+export interface GeneratedPost {
+  id: string;
+  name: string;
+  imageSource: string;
+  history: RetouchHistory[];
+  blueprintId: string;
+  brandId?: string;
+  aspectRatio: AspectRatio;
+  createdAt: number;
 }
 
 export interface DesignReference {
@@ -36,8 +69,17 @@ export interface DesignReference {
   tags: string[];
   imageSource: string;
   templateImage?: string;
-  markdownBrief: string; // Now focusing on "How to use this system"
+  markdownBrief: string;
   jsonSpec: DesignPromptJson;
+  aspectRatio: AspectRatio;
+  createdAt: number;
+}
+
+export interface BrandReference {
+  id: string;
+  name: string;
+  imageSource: string;
+  dna: BrandDNA;
   createdAt: number;
 }
 
@@ -45,7 +87,8 @@ export enum AppTool {
   LANDING = 'landing',
   BUILDER = 'builder',
   LIBRARY = 'library',
-  GENERATOR = 'generator'
+  GENERATOR = 'generator',
+  BRAND_LAB = 'brand_lab'
 }
 
 export type RemixIntensity = 'strict' | 'light' | 'heavy';
