@@ -34,8 +34,8 @@ const BrandLab: React.FC<BrandLabProps> = ({ onSave, onBack }) => {
     setError(null);
     setIsSaved(false);
     try {
-      const data = await analyzeBrand(image);
-      setDna(data);
+      const { dna } = await analyzeBrand(image);
+      setDna(dna);
     } catch (err: any) {
       setError(err.message || "Brand analysis failed. The image might be too small or blocked.");
     } finally {
@@ -58,8 +58,8 @@ const BrandLab: React.FC<BrandLabProps> = ({ onSave, onBack }) => {
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 animate-in fade-in duration-500">
       <div className="flex items-center space-x-4 mb-8">
-        <button 
-          onClick={onBack} 
+        <button
+          onClick={onBack}
           className="p-3 rounded-xl bg-slate-800/50 text-slate-400 hover:text-white transition-all active:scale-95 flex items-center justify-center"
         >
           <ArrowLeft size={20} />
@@ -75,8 +75,8 @@ const BrandLab: React.FC<BrandLabProps> = ({ onSave, onBack }) => {
           <div className="p-6 rounded-[2rem] border border-slate-800 bg-slate-900/50 shadow-2xl space-y-6">
             <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Asset Input</h3>
             {!image ? (
-              <div 
-                onClick={() => fileInputRef.current?.click()} 
+              <div
+                onClick={() => fileInputRef.current?.click()}
                 className="aspect-square border-2 border-dashed border-slate-700 rounded-3xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/30 hover:border-pink-500/50 transition-all group active:scale-[0.99]"
               >
                 <div className="p-4 rounded-full bg-slate-800/50 group-hover:scale-110 transition-transform">
@@ -89,7 +89,7 @@ const BrandLab: React.FC<BrandLabProps> = ({ onSave, onBack }) => {
               <div className="relative aspect-square rounded-3xl overflow-hidden border border-slate-700 bg-black group flex items-center justify-center">
                 <img src={image} className="w-full h-full object-contain" alt="Brand Asset" />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <button 
+                  <button
                     onClick={() => { setImage(null); setDna(null); setError(null); }}
                     className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all active:scale-95"
                   >
@@ -106,12 +106,11 @@ const BrandLab: React.FC<BrandLabProps> = ({ onSave, onBack }) => {
               </div>
             )}
 
-            <button 
-              onClick={handleAnalyze} 
+            <button
+              onClick={handleAnalyze}
               disabled={loading || !image}
-              className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] shadow-lg ${
-                loading ? 'bg-slate-800 text-slate-500' : 'bg-pink-600 hover:bg-pink-500 text-white shadow-pink-900/20'
-              }`}
+              className={`w-full py-5 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] shadow-lg ${loading ? 'bg-slate-800 text-slate-500' : 'bg-pink-600 hover:bg-pink-500 text-white shadow-pink-900/20'
+                }`}
             >
               {loading ? (
                 <>
@@ -137,12 +136,11 @@ const BrandLab: React.FC<BrandLabProps> = ({ onSave, onBack }) => {
                     <h3 className="text-2xl font-bold text-pink-400">{dna.brand_name}</h3>
                     <p className="text-xs text-slate-500 uppercase tracking-widest font-bold">DNA Analysis Report</p>
                   </div>
-                  <button 
-                    onClick={handleSave} 
+                  <button
+                    onClick={handleSave}
                     disabled={isSaved}
-                    className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all active:scale-95 ${
-                      isSaved ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-green-600 hover:bg-green-500 text-white shadow-lg'
-                    }`}
+                    className={`px-6 py-2.5 rounded-xl text-sm font-bold flex items-center space-x-2 transition-all active:scale-95 ${isSaved ? 'bg-green-500/10 border border-green-500/30 text-green-400' : 'bg-green-600 hover:bg-green-500 text-white shadow-lg'
+                      }`}
                   >
                     {isSaved ? <CheckCircle2 size={16} /> : <Save size={16} />}
                     <span>{isSaved ? 'Saved to Lab' : 'Save Identity'}</span>

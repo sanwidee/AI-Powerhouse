@@ -1,16 +1,63 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
-import { DesignPromptJson, ContentBrief, BrandDNA, AspectRatio } from "../types";
+import { DesignPromptJson, ContentBrief, BrandDNA, AspectRatio, UsageLog } from "../types";
+
+const PRICING = {
+  'flash': { input: 0.075 / 1000000, output: 0.30 / 1000000 },
+  'image': { flat: 0.04 },
+};
+
+const USD_TO_IDR = 15500;
+
+export const recordUsage = async (
+  feature: UsageLog['feature'],
+  model: string,
+  response: GenerateContentResponse
+): Promise<UsageLog> => {
+  const usage = response.usageMetadata || { promptTokenCount: 0, candidatesTokenCount: 0 };
+  const input = usage.promptTokenCount || 0;
+  const output = usage.candidatesTokenCount || 0;
+
+  let costUSD = 0;
+  if (model.includes('image')) {
+    costUSD = PRICING.image.flat;
+  } else {
+    costUSD = (input * PRICING.flash.input) + (output * PRICING.flash.output);
+  }
+
+  const log: UsageLog = {
+    id: Date.now().toString(),
+    timestamp: Date.now(),
+    feature,
+    model,
+    inputTokens: input,
+    outputTokens: output,
+    costUSD,
+    costIDR: Math.ceil(costUSD * USD_TO_IDR)
+  };
+
+  try {
+    await fetch('/api/usage_logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(log)
+    });
+  } catch (e) {
+    console.error("Failed to save usage log", e);
+  }
+
+  return log;
+};
 
 const getAI = () => {
-  // Priority 1: Vite Environment variable (Local Dev)
-  // Priority 2: Session Storage (Stand-alone/GitHub Pages)
-  const key = import.meta.env.VITE_GEMINI_API_KEY || sessionStorage.getItem('IKHSAN_LAB_KEY');
-  
+  // Priority 1: Session Storage (Manual Override in UI)
+  // Priority 2: Vite Environment variable (Local Dev .env)
+  const key = sessionStorage.getItem('IKHSAN_LAB_KEY') || import.meta.env.VITE_GEMINI_API_KEY;
+
   if (!key) {
     throw new Error("No API Key found. Please configure your key in settings or .env file.");
   }
-  
+
   return new GoogleGenAI({ apiKey: key });
 };
 
@@ -23,13 +70,14 @@ const extractJsonFromText = (text: string): string => {
   return text.trim();
 };
 
-export const analyzeDesign = async (imageB64: string, userNotes?: string): Promise<{ markdown: string, json: DesignPromptJson }> => {
+export const analyzeDesign = async (imageB64: string, userNotes?: string): Promise<{ markdown: string, json: DesignPromptJson, usage: UsageLog }> => {
   const ai = getAI();
   const imagePart = {
     inlineData: { mimeType: 'image/jpeg', data: imageB64.split(',')[1] || imageB64 }
   };
-  
-  const textPart = { text: `You are a World-Class Creative Director and Design Systems Engineer. 
+
+  const textPart = {
+    text: `You are a World-Class Creative Director and Design Systems Engineer. 
   Task: Deconstruct the provided social media post into its modular "Design DNA".
   
   User Focus Notes: ${userNotes || 'Standard analysis'}.
@@ -79,11 +127,11 @@ export const analyzeDesign = async (imageB64: string, userNotes?: string): Promi
   const parts = raw.split('---JSON_START---');
   const markdown = parts[0] || '';
   const jsonPartRaw = parts[1] || '';
-  
+
   try {
     const cleanedJsonStr = extractJsonFromText(jsonPartRaw);
     const jsonData = JSON.parse(cleanedJsonStr) as DesignPromptJson;
-    
+
     if (!jsonData.structural_rules) {
       jsonData.structural_rules = {
         layout_archetype: "Modern Graphic",
@@ -93,22 +141,23 @@ export const analyzeDesign = async (imageB64: string, userNotes?: string): Promi
         aesthetic_motifs: "Clean edges, soft shadows"
       };
     }
-    
+
     if (!jsonData.base_visual_dna_prompt || jsonData.base_visual_dna_prompt.includes('UNDEFINED')) {
       jsonData.base_visual_dna_prompt = "A modern professional social media post layout with a clean background, a large bold headline at the top, and a relevant graphic illustration in the center. Studio lighting, high quality graphic design style.";
     }
-    
-    return { markdown: markdown.trim(), json: jsonData };
+
+    const usageLog = await recordUsage('Design Builder DNA', 'gemini-3-flash-preview', response);
+    return { markdown: markdown.trim(), json: jsonData, usage: usageLog };
   } catch (e) {
     throw new Error("DNA Sequence Error: The system failed to parse the structural logic.");
   }
 };
 
-export const analyzeBrand = async (imageB64: string): Promise<BrandDNA> => {
+export const analyzeBrand = async (imageB64: string): Promise<{ dna: BrandDNA, usage: UsageLog }> => {
   const ai = getAI();
   const prompt = `Analyze this brand asset. Extract Brand DNA. 
   Return ONLY a JSON object: { "brand_name": "string", "primary_colors": ["hex codes"], "color_logic": "string", "brand_vibe": "string", "typography_notes": "string", "forbidden_styles": [] }`;
-  
+
   const response = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: { parts: [{ inlineData: { mimeType: 'image/jpeg', data: imageB64.split(',')[1] || imageB64 } }, { text: prompt }] },
@@ -117,15 +166,16 @@ export const analyzeBrand = async (imageB64: string): Promise<BrandDNA> => {
 
   const text = response.text || '';
   if (!text.trim()) throw new Error("No response from Brand Lab.");
-  
+
   try {
-    return JSON.parse(extractJsonFromText(text));
+    const usageLog = await recordUsage('Brand Lab', 'gemini-3-flash-preview', response);
+    return { dna: JSON.parse(extractJsonFromText(text)), usage: usageLog };
   } catch (e) {
     throw new Error("Brand Lab returned invalid JSON format.");
   }
 };
 
-export const generateTemplateImage = async (jsonSpec: DesignPromptJson, ratio: AspectRatio): Promise<string> => {
+export const generateTemplateImage = async (jsonSpec: DesignPromptJson, ratio: AspectRatio): Promise<{ image: string, usage: UsageLog }> => {
   const ai = getAI();
   const templatePrompt = `Create a high-fidelity design mockup based on these rules: ${jsonSpec.base_visual_dna_prompt}. 
   The layout is a ${jsonSpec.structural_rules.layout_archetype}. 
@@ -144,23 +194,24 @@ export const generateTemplateImage = async (jsonSpec: DesignPromptJson, ratio: A
   const parts = response.candidates?.[0]?.content?.parts;
   if (!parts) throw new Error("Image generation failed.");
 
+  const usageLog = await recordUsage('Design Builder Visual', 'gemini-3-pro-image-preview', response);
   for (const part of parts) {
-    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    if (part.inlineData) return { image: `data:image/png;base64,${part.inlineData.data}`, usage: usageLog };
   }
   throw new Error("Validation render failed.");
 };
 
 export const generatePostFromReference = async (
-  reference: DesignPromptJson, 
+  reference: DesignPromptJson,
   brief: ContentBrief,
   intensity: string,
   brandOverride?: BrandDNA
-): Promise<{ report: string, finalVisualPrompt: string }> => {
+): Promise<{ report: string, finalVisualPrompt: string, usage: UsageLog }> => {
   const ai = getAI();
-  const brandContext = brandOverride 
-    ? `BRAND RULES: ${JSON.stringify(brandOverride)}` 
+  const brandContext = brandOverride
+    ? `BRAND RULES: ${JSON.stringify(brandOverride)}`
     : "Use original design colors.";
-  
+
   const carouselCtx = brief.slide_number ? `This is slide ${brief.slide_number} of a ${brief.total_slides} slide carousel. Adapt layout accordingly.` : "";
 
   const prompt = `Create a new post remix. 
@@ -178,38 +229,38 @@ export const generatePostFromReference = async (
   });
 
   const raw = response.text || '';
-  if (!raw.includes('---PROMPT_START---')) return { report: raw, finalVisualPrompt: '' };
-
+  const usageLog = await recordUsage('Post Generator', 'gemini-3-flash-preview', response);
   const [report, finalPrompt] = raw.split('---PROMPT_START---');
-  return { report: report.trim(), finalVisualPrompt: finalPrompt?.trim() || '' };
+  return { report: report.trim(), finalVisualPrompt: finalPrompt?.trim() || '', usage: usageLog };
 };
 
-export const generateRemixImage = async (visualPrompt: string, ratio: AspectRatio): Promise<string> => {
+export const generateRemixImage = async (visualPrompt: string, ratio: AspectRatio): Promise<{ image: string, usage: UsageLog }> => {
   const ai = getAI();
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-image-preview',
     contents: { parts: [{ text: `${visualPrompt}. Aspect Ratio: ${ratio}. Professional graphic design.` }] },
     config: { imageConfig: { aspectRatio: ratio } },
   });
-  
+
   const parts = response.candidates?.[0]?.content?.parts;
   if (!parts) throw new Error("Remix generation failed.");
 
+  const usageLog = await recordUsage('Post Generator', 'gemini-3-pro-image-preview', response);
   for (const part of parts) {
-    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    if (part.inlineData) return { image: `data:image/png;base64,${part.inlineData.data}`, usage: usageLog };
   }
   throw new Error("Remix failed to render.");
 };
 
 export const refinePostImage = async (
-  currentImageB64: string, 
-  instruction: string, 
+  currentImageB64: string,
+  instruction: string,
   ratio: AspectRatio,
   refImageB64?: string,
   isAnnotation: boolean = false
-): Promise<string> => {
+): Promise<{ image: string, usage: UsageLog }> => {
   const ai = getAI();
-  
+
   const parts: any[] = [
     { inlineData: { mimeType: 'image/png', data: currentImageB64.split(',')[1] || currentImageB64 } }
   ];
@@ -219,8 +270,8 @@ export const refinePostImage = async (
   }
 
   // ENHANCED RETOUCH PROTOCOL
-  const baseInstruction = isAnnotation 
-    ? "PERFORM STRUCTURAL CORRECTION ONLY. Lock all other pixels. Move or resize based on the instruction." 
+  const baseInstruction = isAnnotation
+    ? "PERFORM STRUCTURAL CORRECTION ONLY. Lock all other pixels. Move or resize based on the instruction."
     : "PERFORM SPECIFIC CONTENT EDIT ONLY. Preserve the exact layout, background, character, and aesthetic of the source image.";
 
   const preservationDirective = `
@@ -232,7 +283,7 @@ export const refinePostImage = async (
     5. Treat this as a surgical update, not a new generation.
   `;
 
-  parts.push({ 
+  parts.push({
     text: `${baseInstruction}
     
     INSTRUCTION: ${instruction}
@@ -241,13 +292,13 @@ export const refinePostImage = async (
     
     ${preservationDirective}
     
-    Ratio: ${ratio}. Output the final modified image.` 
+    Ratio: ${ratio}. Output the final modified image.`
   });
 
   const response = await ai.models.generateContent({
     model: 'gemini-3-pro-image-preview',
     contents: { parts },
-    config: { 
+    config: {
       imageConfig: { aspectRatio: ratio },
     }
   });
@@ -255,8 +306,9 @@ export const refinePostImage = async (
   const resultParts = response.candidates?.[0]?.content?.parts;
   if (!resultParts) throw new Error("Refinement failed.");
 
+  const usageLog = await recordUsage('Production Studio', 'gemini-3-pro-image-preview', response);
   for (const part of resultParts) {
-    if (part.inlineData) return `data:image/png;base64,${part.inlineData.data}`;
+    if (part.inlineData) return { image: `data:image/png;base64,${part.inlineData.data}`, usage: usageLog };
   }
   throw new Error("Refinement failed to render.");
 };

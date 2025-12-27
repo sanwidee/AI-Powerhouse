@@ -64,7 +64,7 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
 
       if (finalVisualPrompt) {
         setImageLoading(true);
-        const img = await generateRemixImage(finalVisualPrompt, brief.aspectRatio);
+        const { image: img } = await generateRemixImage(finalVisualPrompt, brief.aspectRatio);
         setRemixImage(img);
         setImageLoading(false);
       }
@@ -102,7 +102,7 @@ const Generator: React.FC<GeneratorProps> = ({ references, brands, onSavePost, o
     setIsRefining(true);
     setError(null);
     try {
-      const refined = await refinePostImage(remixImage, refineInput, brief.aspectRatio);
+      const { image: refined } = await refinePostImage(remixImage, refineInput, brief.aspectRatio);
       setRemixImage(refined);
       setRefineInput('');
     } catch (err: any) {

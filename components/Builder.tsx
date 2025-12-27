@@ -3,7 +3,7 @@ import React, { useState, useRef } from 'react';
 // Added missing Rocket import
 import { Upload, Sparkles, Save, ArrowLeft, Loader2, Terminal, Zap, AlertCircle, CheckCircle2, ChevronRight, XCircle, Code, Layers, Palette, Type as TypeIcon, Rocket } from 'lucide-react';
 import { analyzeDesign, generateTemplateImage } from '../services/geminiService';
-import { DesignReference, DesignPromptJson, AspectRatio } from '../types';
+import { DesignReference, DesignPromptJson, AspectRatio, UsageLog } from '../types';
 
 interface BuilderProps {
   onSave: (ref: DesignReference) => void;
@@ -16,7 +16,7 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
   const [image, setImage] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [ratio, setRatio] = useState<AspectRatio>('1:1');
-  const [result, setResult] = useState<{ markdown: string, json: DesignPromptJson } | null>(null);
+  const [result, setResult] = useState<{ markdown: string, json: DesignPromptJson, usage: UsageLog } | null>(null);
   const [templateImage, setTemplateImage] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,11 +39,22 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
     setTemplateImage(null);
     setError(null);
     setIsSaved(false);
-    
+
     try {
       const data = await analyzeDesign(image, notes);
       if (!data.json || !data.markdown) throw new Error("Incomplete DNA extraction.");
       setResult(data);
+
+      // Auto-generate visual sample
+      setTemplateLoading(true);
+      try {
+        const generated = await generateTemplateImage(data.json, ratio);
+        setTemplateImage(generated.image);
+      } catch (tErr) {
+        console.warn("Auto-visual generation failed, but DNA was captured.");
+      } finally {
+        setTemplateLoading(false);
+      }
     } catch (err: any) {
       console.error(err);
       setError(err.message || "The lab couldn't decode this design DNA. Please try another image.");
@@ -58,7 +69,7 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
     setError(null);
     try {
       const generated = await generateTemplateImage(result.json, ratio);
-      setTemplateImage(generated);
+      setTemplateImage(generated.image);
     } catch (err: any) {
       setError("Visual validation failed. The layout engine encountered an error.");
     } finally {
@@ -85,8 +96,8 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
   return (
     <div className="max-w-7xl mx-auto px-6 py-8 animate-in fade-in duration-500">
       <div className="flex items-center space-x-4 mb-8">
-        <button 
-          onClick={onBack} 
+        <button
+          onClick={onBack}
           className="p-3 rounded-xl bg-slate-800/50 text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95 flex items-center justify-center"
         >
           <ArrowLeft size={20} />
@@ -105,8 +116,8 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
               <div className="space-y-4">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Step 1: Upload Source</label>
                 {!image ? (
-                  <div 
-                    onClick={() => fileInputRef.current?.click()} 
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
                     className="aspect-video border-2 border-dashed border-slate-700 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-slate-800/30 hover:border-blue-500/50 transition-all group active:scale-[0.99]"
                   >
                     <div className="p-4 rounded-full bg-slate-800/50 group-hover:scale-110 transition-transform">
@@ -119,7 +130,7 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
                   <div className="relative rounded-2xl overflow-hidden border border-slate-700 bg-black group aspect-video flex items-center justify-center">
                     <img src={image} className="w-full h-full object-contain" alt="Ref" />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <button 
+                      <button
                         onClick={() => { setImage(null); setResult(null); setError(null); }}
                         className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all active:scale-95"
                       >
@@ -132,12 +143,12 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
 
               <div className="space-y-4">
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Step 2: Focus Parameters</label>
-                <textarea 
-                  rows={4} 
-                  placeholder="Add context... (e.g., 'Focus only on the grid layout' or 'Ignore the illustration style')" 
+                <textarea
+                  rows={4}
+                  placeholder="Add context... (e.g., 'Focus only on the grid layout' or 'Ignore the illustration style')"
                   className="w-full p-4 bg-slate-800/50 border border-slate-700 rounded-2xl text-sm focus:ring-2 focus:ring-blue-500/50 focus:outline-none transition-all placeholder:text-slate-600"
-                  value={notes} 
-                  onChange={(e) => setNotes(e.target.value)} 
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                 />
               </div>
 
@@ -149,12 +160,11 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
               )}
             </div>
 
-            <button 
-              onClick={handleAnalyze} 
-              disabled={loading || !image} 
-              className={`w-full py-5 mt-6 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] shadow-lg ${
-                loading ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-              }`}
+            <button
+              onClick={handleAnalyze}
+              disabled={loading || !image}
+              className={`w-full py-5 mt-6 rounded-2xl font-bold flex items-center justify-center space-x-3 transition-all active:scale-[0.98] shadow-lg ${loading ? 'bg-slate-800 text-slate-500 cursor-wait' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
+                }`}
             >
               {loading ? (
                 <>
@@ -184,17 +194,17 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
                     </div>
                     <p className="text-sm text-slate-500 italic">Extracted: {result.json?.template_name || 'Unknown Blueprint'}</p>
                   </div>
-                  
+
                   <div className="flex items-center space-x-3 bg-slate-800/50 p-2 rounded-2xl border border-slate-700/50">
-                    <select 
-                      value={ratio} 
-                      onChange={(e) => setRatio(e.target.value as AspectRatio)} 
+                    <select
+                      value={ratio}
+                      onChange={(e) => setRatio(e.target.value as AspectRatio)}
                       className="bg-transparent text-xs font-bold text-slate-300 outline-none px-2 cursor-pointer"
                     >
                       {['1:1', '9:16', '16:9', '4:3', '3:4'].map(r => <option key={r} value={r} className="bg-slate-900">{r}</option>)}
                     </select>
-                    <button 
-                      onClick={handleGenerateTemplate} 
+                    <button
+                      onClick={handleGenerateTemplate}
                       disabled={templateLoading}
                       className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-xs font-bold text-white transition-all active:scale-95 flex items-center space-x-2"
                     >
@@ -215,8 +225,8 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
                   )}
                   {templateLoading && (
                     <div className="absolute inset-0 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center animate-pulse z-10 text-center px-4">
-                       <Zap size={32} className="text-indigo-400 mb-4 animate-bounce" />
-                       <span className="text-xs font-bold text-indigo-300 tracking-[0.2em]">GENERATING VISUAL PROXY...</span>
+                      <Zap size={32} className="text-indigo-400 mb-4 animate-bounce" />
+                      <span className="text-xs font-bold text-indigo-300 tracking-[0.2em]">GENERATING VISUAL PROXY...</span>
                     </div>
                   )}
                 </div>
@@ -232,14 +242,13 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
                   </div>
                 </div>
 
-                <button 
-                  onClick={handleSave} 
+                <button
+                  onClick={handleSave}
                   disabled={isSaved}
-                  className={`w-full mt-6 py-4 rounded-2xl font-bold transition-all active:scale-[0.98] flex items-center justify-center space-x-2 border shadow-lg ${
-                    isSaved 
-                      ? 'bg-green-500/10 border-green-500/50 text-green-400 cursor-default' 
-                      : 'bg-green-600 hover:bg-green-500 border-green-500/20 text-white shadow-green-900/20'
-                  }`}
+                  className={`w-full mt-6 py-4 rounded-2xl font-bold transition-all active:scale-[0.98] flex items-center justify-center space-x-2 border shadow-lg ${isSaved
+                    ? 'bg-green-500/10 border-green-500/50 text-green-400 cursor-default'
+                    : 'bg-green-600 hover:bg-green-500 border-green-500/20 text-white shadow-green-900/20'
+                    }`}
                 >
                   {isSaved ? (
                     <>
@@ -275,44 +284,44 @@ const Builder: React.FC<BuilderProps> = ({ onSave, onBack }) => {
         <div className="mt-12 animate-in slide-in-from-bottom-8 duration-700">
           <div className="p-8 rounded-[2rem] bg-slate-900/50 border border-slate-800/50 shadow-2xl">
             <div className="flex items-center space-x-3 mb-8 border-b border-slate-800 pb-4">
-               <div className="p-2 rounded-lg bg-blue-500/10">
-                 <Code size={18} className="text-blue-400" />
-               </div>
-               <h3 className="text-lg font-bold tracking-tight">Machine DNA Registry</h3>
-               <span className="text-[10px] font-mono text-slate-500 ml-auto uppercase tracking-[0.3em]">PROMPT_VARIABLES_V2.0</span>
+              <div className="p-2 rounded-lg bg-blue-500/10">
+                <Code size={18} className="text-blue-400" />
+              </div>
+              <h3 className="text-lg font-bold tracking-tight">Machine DNA Registry</h3>
+              <span className="text-[10px] font-mono text-slate-500 ml-auto uppercase tracking-[0.3em]">PROMPT_VARIABLES_V2.0</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-               <VariableBox 
-                icon={<Zap size={14} className="text-yellow-400" />} 
-                label="Archetype" 
-                value={result.json.structural_rules.layout_archetype} 
-               />
-               <VariableBox 
-                icon={<Layers size={14} className="text-indigo-400" />} 
-                label="Composition Map" 
-                value={result.json.structural_rules.composition_map} 
-               />
-               <VariableBox 
-                icon={<Palette size={14} className="text-pink-400" />} 
-                label="Aesthetic Motifs" 
-                value={result.json.structural_rules.aesthetic_motifs} 
-               />
-               <VariableBox 
-                icon={<TypeIcon size={14} className="text-cyan-400" />} 
-                label="Typography System" 
-                value={result.json.structural_rules.typography_system} 
-               />
-               <VariableBox 
-                icon={<Rocket size={14} className="text-green-400" />} 
-                label="Aspect Ratio" 
-                value={ratio} 
-               />
+              <VariableBox
+                icon={<Zap size={14} className="text-yellow-400" />}
+                label="Archetype"
+                value={result.json.structural_rules.layout_archetype}
+              />
+              <VariableBox
+                icon={<Layers size={14} className="text-indigo-400" />}
+                label="Composition Map"
+                value={result.json.structural_rules.composition_map}
+              />
+              <VariableBox
+                icon={<Palette size={14} className="text-pink-400" />}
+                label="Aesthetic Motifs"
+                value={result.json.structural_rules.aesthetic_motifs}
+              />
+              <VariableBox
+                icon={<TypeIcon size={14} className="text-cyan-400" />}
+                label="Typography System"
+                value={result.json.structural_rules.typography_system}
+              />
+              <VariableBox
+                icon={<Rocket size={14} className="text-green-400" />}
+                label="Aspect Ratio"
+                value={ratio}
+              />
             </div>
-            
+
             <div className="mt-8 p-6 rounded-2xl bg-slate-950/50 border border-slate-800/80 font-mono text-xs text-blue-400/70 overflow-x-auto">
-               <p className="mb-2 opacity-50 uppercase tracking-widest text-[10px] font-bold">Generated Visual DNA Prompt</p>
-               <p className="italic leading-relaxed">"{result.json.base_visual_dna_prompt}"</p>
+              <p className="mb-2 opacity-50 uppercase tracking-widest text-[10px] font-bold">Generated Visual DNA Prompt</p>
+              <p className="italic leading-relaxed">"{result.json.base_visual_dna_prompt}"</p>
             </div>
           </div>
         </div>

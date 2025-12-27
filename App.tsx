@@ -1,11 +1,12 @@
 
 import React, { useState, useEffect } from 'react';
-import { Wrench, Star, Rocket, Terminal, Github, Moon, Zap, Palette, ChevronRight, Key, Globe } from 'lucide-react';
+import { Wrench, Star, Rocket, Terminal, Github, Moon, Zap, Palette, ChevronRight, Key, Globe, Settings as SettingsIcon } from 'lucide-react';
 import { AppTool, DesignReference, BrandReference, GeneratedPost } from './types';
 import Builder from './components/Builder';
 import Library from './components/Library';
 import Generator from './components/Generator';
 import BrandLab from './components/BrandLab';
+import Settings from './components/Settings';
 
 const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState<AppTool>(AppTool.LANDING);
@@ -177,13 +178,24 @@ const App: React.FC = () => {
             </div>
           )}
 
-          <button
-            onClick={handleOpenKey}
-            disabled={isStandalone && manualKey.trim().length < 20}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
-          >
-            {isStandalone ? "Activate Lab" : "Select Paid API Key"}
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={handleOpenKey}
+              disabled={isStandalone && manualKey.trim().length < 20}
+              className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white rounded-2xl font-bold transition-all shadow-lg shadow-blue-900/20 active:scale-[0.98]"
+            >
+              {isStandalone ? "Activate Lab" : "Select Paid API Key"}
+            </button>
+
+            {isStandalone && import.meta.env.VITE_GEMINI_API_KEY && (
+              <button
+                onClick={() => setHasKey(true)}
+                className="w-full py-3 bg-transparent hover:bg-slate-800/50 text-slate-500 hover:text-slate-300 rounded-2xl text-xs font-semibold transition-all"
+              >
+                Cancel & Use Default (.env)
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -217,6 +229,18 @@ const App: React.FC = () => {
         );
       case AppTool.BRAND_LAB:
         return <BrandLab onSave={saveBrand} onBack={() => setActiveTool(AppTool.LANDING)} />;
+      case AppTool.SETTINGS:
+        return (
+          <Settings
+            currentKey={sessionStorage.getItem('IKHSAN_LAB_KEY') || manualKey || ''}
+            onUpdateKey={(key) => {
+              sessionStorage.setItem('IKHSAN_LAB_KEY', key);
+              setManualKey(key);
+              setHasKey(true);
+            }}
+            onBack={() => setActiveTool(AppTool.LANDING)}
+          />
+        );
       default:
         return (
           <div className="max-w-6xl mx-auto px-6 py-12">
@@ -237,16 +261,7 @@ const App: React.FC = () => {
               <ToolCard icon={<Rocket className="text-indigo-400" />} title="Post Generator" desc="Deploy & Remix." onClick={() => setActiveTool(AppTool.GENERATOR)} accent="indigo" />
             </div>
 
-            {isStandalone && (
-              <div className="mt-16 pt-8 border-t border-slate-800 text-center">
-                <button
-                  onClick={() => { sessionStorage.removeItem('IKHSAN_LAB_KEY'); window.location.reload(); }}
-                  className="text-[10px] font-bold text-slate-600 hover:text-red-400 uppercase tracking-widest transition-colors"
-                >
-                  Reset Session API Key
-                </button>
-              </div>
-            )}
+            {/* Removed Configure API Key button from bottom */}
           </div>
         );
     }
@@ -259,6 +274,14 @@ const App: React.FC = () => {
           <Zap size={20} className="text-blue-500" />
           <span className="font-bold text-lg tracking-tight">IKHSAN'S <span className="text-blue-500">LAB</span></span>
         </div>
+
+        <button
+          onClick={() => setActiveTool(AppTool.SETTINGS)}
+          className="p-2.5 rounded-xl bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white transition-all border border-slate-700/50 flex items-center space-x-2"
+        >
+          <SettingsIcon size={18} />
+          <span className="text-xs font-bold uppercase tracking-widest hidden sm:inline">Settings</span>
+        </button>
       </nav>
       {renderTool()}
     </div>

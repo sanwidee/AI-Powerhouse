@@ -2,7 +2,7 @@
 import React, { useState, useRef } from 'react';
 /* Added missing XCircle to the import list from lucide-react */
 import { Search, Tag, Trash2, ExternalLink, Download, ArrowLeft, Filter, Grid, List as ListIcon, ImageIcon, LayoutTemplate, Copy, Check, Palette, ShieldAlert, Zap, History, FileCode, Terminal, Rocket, Clock, MessageSquare, Send, Loader2, Upload, AlertCircle, Eye, XCircle } from 'lucide-react';
-import { DesignReference, BrandReference, GeneratedPost, RetouchHistory } from '../types';
+import { DesignReference, BrandReference, GeneratedPost, RetouchHistory, UsageLog } from '../types';
 import { refinePostImage } from '../services/geminiService';
 
 interface LibraryProps {
@@ -50,7 +50,7 @@ const Library: React.FC<LibraryProps> = ({ references, brands, generatedPosts, o
     setIsProcessing(true);
     setStudioError(null);
     try {
-      const refinedImg = await refinePostImage(
+      const { image: refinedImg } = await refinePostImage(
         selectedPost.imageSource,
         retouchInput,
         selectedPost.aspectRatio,

@@ -97,7 +97,19 @@ export enum AppTool {
   BUILDER = 'builder',
   LIBRARY = 'library',
   GENERATOR = 'generator',
-  BRAND_LAB = 'brand_lab'
+  BRAND_LAB = 'brand_lab',
+  SETTINGS = 'settings'
 }
 
 export type RemixIntensity = 'strict' | 'light' | 'heavy';
+
+export interface UsageLog {
+  id: string;
+  timestamp: number;
+  feature: 'Design Builder DNA' | 'Design Builder Visual' | 'Brand Lab' | 'Post Generator' | 'Production Studio';
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  costUSD: number;
+  costIDR: number;
+}
