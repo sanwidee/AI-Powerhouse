@@ -25,7 +25,25 @@ app.get('/api/:collection', async (req, res) => {
 
 app.post('/api/:collection', async (req, res) => {
     try {
-        await fs.writeFile(getFile(req.params.collection), JSON.stringify(req.body, null, 2));
+        const collection = req.params.collection;
+        const filePath = getFile(collection);
+
+        if (collection === 'usage_logs' && !Array.isArray(req.body)) {
+            // Append mode for usage logs
+            let current = [];
+            try {
+                const data = await fs.readFile(filePath, 'utf8');
+                current = JSON.parse(data);
+                if (!Array.isArray(current)) current = [];
+            } catch (e) {
+                current = [];
+            }
+            current.push(req.body);
+            await fs.writeFile(filePath, JSON.stringify(current, null, 2));
+        } else {
+            // Overwrite mode for other collections
+            await fs.writeFile(filePath, JSON.stringify(req.body, null, 2));
+        }
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: error.message });
